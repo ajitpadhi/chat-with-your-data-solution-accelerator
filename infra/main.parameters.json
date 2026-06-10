@@ -2,6 +2,9 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
+    "deploymentFlavor": {
+      "value": "${DEPLOYMENT_FLAVOR=avm}"
+    },
     "solutionName": {
       "value": "${AZURE_ENV_NAME}"
     },
@@ -19,7 +22,7 @@
       "value": "${APP_ENV=Prod}"
     },
     "hostingModel": {
-      "value": "${AZURE_APP_SERVICE_HOSTING_MODEL=code}"
+      "value": "${AZURE_APP_SERVICE_HOSTING_MODEL=container}"
     },
     "hostingPlanSku": {
       "value": "${HOSTING_PLAN_SKU=B3}"
