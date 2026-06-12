@@ -504,6 +504,17 @@ resource resourceGroupTags 'Microsoft.Resources/tags@2025-04-01' = {
 // Resources      //
 // ============== //
 
+// ========== Managed Identity ========== //
+module managedIdentityModule './modules/identity/managed-identity.bicep' = if (databaseType == 'PostgreSQL') {
+  name: take('module.managed-identity.user-assigned-identity.${solutionName}', 64)
+  params: {
+    solutionName: solutionName
+    location: location
+    tags: tags
+    enableTelemetry: enableTelemetry
+  }
+}
+
 #disable-next-line no-deployments-resources
 resource avmTelemetry 'Microsoft.Resources/deployments@2024-03-01' = if (enableTelemetry) {
   name: '46d3xbcp.ptn.sa-chatwithyourdata.${replace('-..--..-', '.', '-')}.${substring(uniqueString(deployment().name, location), 0, 4)}'
@@ -2012,26 +2023,26 @@ module postgresDBModule './modules/data/postgresql-flexible-server.bicep' = if (
     privateDnsZoneResourceIds: enablePrivateNetworking ? [
       privateDnsZoneDeployments[dnsZoneIndex.postgresDB]!.outputs.resourceId
     ] : []
-    // administrators: concat(
-    //   managedIdentityModule.outputs.principalId != ''
-    //     ? [
-    //         {
-    //           objectId: managedIdentityModule.outputs.principalId
-    //           principalName: managedIdentityModule.outputs.name
-    //           principalType: 'ServicePrincipal'
-    //         }
-    //       ]
-    //     : [],
-    //   !empty(principal.id)
-    //     ? [
-    //         {
-    //           objectId: principal.id
-    //           principalName: principal.name
-    //           principalType: principal.type
-    //         }
-    //       ]
-    //     : []
-    // )
+    administrators: concat(
+      managedIdentityModule!.outputs.principalId != ''
+        ? [
+            {
+              objectId: managedIdentityModule!.outputs.principalId
+              principalName: managedIdentityModule!.outputs.name
+              principalType: 'ServicePrincipal'
+            }
+          ]
+        : [],
+      !empty(principal.id)
+        ? [
+            {
+              objectId: principal.id
+              principalName: principal.name
+              principalType: principal.type
+            }
+          ]
+        : []
+    )
     configurations: [
       {
         name: 'azure.extensions'
@@ -2568,10 +2579,6 @@ module adminweb './modules/compute/app-service.bicep' = {
     serverFarmResourceId: webServerFarm.outputs.resourceId
     linuxFxVersion: adminWebLinuxFxVersion
     diagnosticSettings: monitoringDiagnosticSettings
-    managedIdentities: {
-      systemAssigned: true
-      userAssignedResourceIds: [managedIdentityModule.outputs.resourceId]
-    }
     // App settings
     appSettings: union(
       {
@@ -2700,9 +2707,9 @@ module function './modules/compute/function-app.bicep' = {
         AZURE_LOGGING_PACKAGES: ''
         AZURE_OPENAI_SYSTEM_MESSAGE: azureOpenAISystemMessage
         DATABASE_TYPE: databaseType
-        MANAGED_IDENTITY_CLIENT_ID: managedIdentityModule.outputs.clientId
-        MANAGED_IDENTITY_RESOURCE_ID: managedIdentityModule.outputs.resourceId
-        AZURE_CLIENT_ID: managedIdentityModule.outputs.clientId // Required so LangChain AzureSearch vector store authenticates with this user-assigned managed identity
+        // MANAGED_IDENTITY_CLIENT_ID: managedIdentityModule.outputs.clientId
+        // MANAGED_IDENTITY_RESOURCE_ID: managedIdentityModule.outputs.resourceId
+        // AZURE_CLIENT_ID: managedIdentityModule.outputs.clientId // Required so LangChain AzureSearch vector store authenticates with this user-assigned managed identity
         APP_ENV: appEnvironment
         BACKEND_URL: backendUrl
         AZURE_SEARCH_DIMENSIONS: azureSearchDimensions
@@ -2732,7 +2739,7 @@ module function './modules/compute/function-app.bicep' = {
             ? {
                 AZURE_POSTGRESQL_HOST_NAME: postgresDBFqdn
                 AZURE_POSTGRESQL_DATABASE_NAME: postgresDBName
-                AZURE_POSTGRESQL_USER: managedIdentityModule.outputs.name
+                AZURE_POSTGRESQL_USER: managedIdentityModule!.outputs.name
               }
             : {}
     )
@@ -2834,7 +2841,7 @@ module avmEventGridSystemTopic './modules/data/event-grid.bicep'= {
       }
     ]
     // Use only user-assigned identity
-    managedIdentities: { systemAssigned: false, userAssignedResourceIds: [managedIdentityModule.outputs.resourceId] }
+    managedIdentities: { systemAssigned: false }
     enableTelemetry: enableTelemetry
   }
 }

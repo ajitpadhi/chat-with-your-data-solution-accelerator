@@ -15,19 +15,17 @@ param tags object = {}
 @description('Resource ID of the App Service Plan.')
 param serverFarmResourceId string
 
-@description('Resource ID of the storage account for function app.')
-param storageAccountResourceId string
-
 @description('Name of the storage account.')
-param storageAccountName string
+param storageAccountName string = ''
 
 @description('Managed identity configuration.')
-param managedIdentities object = {
-  systemAssigned: true
-}
+param managedIdentities object = { systemAssigned: true }
 
-@description('App settings as name-value pairs.')
-param appSettings array = []
+@description('Optional. Docker image name to use for container function apps.')
+param dockerFullImageName string = ''
+
+@description('App settings as name-value pairs (object).')
+param appSettings object = {}
 
 @description('Site configuration object.')
 param siteConfig object = {}
@@ -37,6 +35,9 @@ param runtimeStack string = 'python'
 
 @description('Runtime version.')
 param runtimeVersion string = '3.11'
+
+@description('Resource kind for the site (e.g., functionapp,linux).')
+param kind string = 'functionapp,linux'
 
 @description('Enable Azure telemetry collection.')
 param enableTelemetry bool = true
@@ -50,8 +51,7 @@ var baseAppSettings = {
   FUNCTIONS_WORKER_RUNTIME: runtimeStack
 }
 
-var customAppSettings = reduce(appSettings, {}, (cur, next) => union(cur, { '${next.name}': next.value }))
-var mergedAppSettings = union(baseAppSettings, customAppSettings)
+var mergedAppSettings = union(baseAppSettings, appSettings, { WEBSITES_ENABLE_APP_SERVICE_STORAGE: 'false' })
 
 // ============================================================================
 // Function App (AVM)
@@ -63,7 +63,7 @@ module functionApp 'br/public:avm/res/web/site:0.23.1' = {
     location: location
     tags: tags
     enableTelemetry: enableTelemetry
-    kind: 'functionapp,linux'
+    kind: kind
     serverFarmResourceId: serverFarmResourceId
     storageAccountRequired: false
     managedIdentities: managedIdentities
@@ -74,7 +74,7 @@ module functionApp 'br/public:avm/res/web/site:0.23.1' = {
       }
     ]
     siteConfig: union({
-      linuxFxVersion: '${toUpper(runtimeStack)}|${runtimeVersion}'
+      linuxFxVersion: !empty(dockerFullImageName) ? 'DOCKER|${dockerFullImageName}' : '${toUpper(runtimeStack)}|${runtimeVersion}'
     }, siteConfig)
   }
 }
