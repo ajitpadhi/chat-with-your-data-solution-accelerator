@@ -43,6 +43,9 @@ param virtualNetworkSubnetId string = ''
 @description('Public network access setting.')
 param publicNetworkAccess string = 'Enabled'
 
+@description('Managed identity configuration.')
+param managedIdentities object = { systemAssigned: true }
+
 // ============================================================================
 // AVM Module Deployment
 // ============================================================================
@@ -55,9 +58,7 @@ module appService 'br/public:avm/res/web/site:0.23.1' = {
     kind: kind
     enableTelemetry: enableTelemetry
     serverFarmResourceId: serverFarmResourceId
-    managedIdentities: {
-      systemAssigned: true
-    }
+    managedIdentities: managedIdentities
     siteConfig: {
       alwaysOn: alwaysOn
       ftpsState: 'Disabled'

@@ -1,6 +1,6 @@
 // ============================================================================
-// Module: Cosmos DB
-// Description: AVM wrapper for Azure Cosmos DB (NoSQL) with WAF alignment
+// Module: Cosmos DB (MongoDB)
+// Description: AVM wrapper for Azure Cosmos DB with MongoDB API
 // AVM Module: avm/res/document-db/database-account:0.19.0
 // WAF: https://learn.microsoft.com/azure/well-architected/service-guides/cosmos-db
 // ============================================================================
@@ -17,16 +17,22 @@ param location string
 @description('Tags to apply to the resource.')
 param tags object = {}
 
-@description('Database name.')
-param databaseName string = 'db_conversation_history'
+@description('MongoDB database name.')
+param databaseName string = 'default'
 
-@description('Container definitions.')
-param containers array = [
-  {
-    name: 'conversations'
-    partitionKeyPath: '/userId'
-  }
-]
+@description('MongoDB collections to create.')
+param collections array = []
+
+@description('MongoDB server version.')
+@allowed(['4.2', '5.0', '6.0', '7.0'])
+param serverVersion string = '7.0'
+
+@description('Enable analytical storage (Synapse Link).')
+param enableAnalyticalStorage bool = false
+
+@description('Default consistency level.')
+@allowed(['Eventual', 'ConsistentPrefix', 'Session', 'BoundedStaleness', 'Strong'])
+param consistencyLevel string = 'Session'
 
 @description('Optional. Enable/Disable usage telemetry for module.')
 param enableTelemetry bool = true
@@ -45,7 +51,7 @@ param enablePrivateNetworking bool = false
 @description('Subnet resource ID for the private endpoint.')
 param privateEndpointSubnetId string = ''
 
-@description('Private DNS zone resource IDs for Cosmos DB.')
+@description('Private DNS zone resource IDs for Cosmos DB (MongoDB).')
 param privateDnsZoneResourceIds array = []
 
 var privateDnsZoneConfigs = [for (zoneId, i) in privateDnsZoneResourceIds: {
@@ -63,9 +69,6 @@ param enableAutomaticFailover bool = false
 @description('Optional. HA paired region for multi-region failover when redundancy is enabled.')
 param haLocation string = ''
 
-@description('Optional. Configurations for Azure Cosmos DB for NoSQL native role-based access control definitions. Allows the creations of custom role definitions.')
-param sqlRoleDefinitions array = []
-
 // ============================================================================
 // AVM Module Deployment
 // ============================================================================
@@ -76,20 +79,16 @@ module cosmosAccount 'br/public:avm/res/document-db/database-account:0.19.0' = {
     location: location
     tags: tags
     enableTelemetry: enableTelemetry
-    capabilitiesToAdd: zoneRedundant ? [] : ['EnableServerless']
-    sqlDatabases: [
+    capabilitiesToAdd: ['EnableMongo']
+    serverVersion: serverVersion
+    enableAnalyticalStorage: enableAnalyticalStorage
+    defaultConsistencyLevel: consistencyLevel
+    mongodbDatabases: [
       {
         name: databaseName
-        containers: [for container in containers: {
-          name: container.name
-          paths: [container.partitionKeyPath]
-          kind: 'Hash'
-          version: 2
-        }]
+        collections: collections
       }
     ]
-    sqlRoleAssignments: []
-    sqlRoleDefinitions: sqlRoleDefinitions
     diagnosticSettings: !empty(diagnosticSettings) ? diagnosticSettings : []
     networkRestrictions: {
       networkAclBypass: 'None'
@@ -100,7 +99,7 @@ module cosmosAccount 'br/public:avm/res/document-db/database-account:0.19.0' = {
         name: 'pep-${name}'
         customNetworkInterfaceName: 'nic-${name}'
         subnetResourceId: privateEndpointSubnetId
-        service: 'Sql'
+        service: 'MongoDB'
         privateDnsZoneGroup: {
           privateDnsZoneGroupConfigs: privateDnsZoneConfigs
         }
@@ -108,25 +107,13 @@ module cosmosAccount 'br/public:avm/res/document-db/database-account:0.19.0' = {
     ] : []
     zoneRedundant: zoneRedundant
     enableAutomaticFailover: enableAutomaticFailover
-    failoverLocations: zoneRedundant
+    failoverLocations: zoneRedundant && !empty(haLocation)
       ? [
-          {
-            failoverPriority: 0
-            isZoneRedundant: true
-            locationName: location
-          }
-          {
-            failoverPriority: 1
-            isZoneRedundant: true
-            locationName: haLocation
-          }
+          { failoverPriority: 0, isZoneRedundant: true, locationName: location }
+          { failoverPriority: 1, isZoneRedundant: true, locationName: haLocation }
         ]
       : [
-          {
-            locationName: location
-            failoverPriority: 0
-            isZoneRedundant: false
-          }
+          { locationName: location, failoverPriority: 0, isZoneRedundant: false }
         ]
   }
 }
@@ -140,11 +127,11 @@ output resourceId string = cosmosAccount.outputs.resourceId
 @description('Name of the Cosmos DB account.')
 output name string = cosmosAccount.outputs.name
 
+@description('MongoDB connection string (without credentials — use Key Vault for secrets).')
+output connectionString string = 'mongodb+srv://${name}.mongo.cosmos.azure.com:443/?ssl=true&retrywrites=false&maxIdleTimeMS=120000'
+
 @description('Endpoint of the Cosmos DB account.')
-output endpoint string = 'https://${name}.documents.azure.com:443/'
+output endpoint string = 'https://${name}.mongo.cosmos.azure.com:443/'
 
 @description('Database name.')
 output databaseName string = databaseName
-
-@description('Container name (first container).')
-output containerName string = containers[0].name
