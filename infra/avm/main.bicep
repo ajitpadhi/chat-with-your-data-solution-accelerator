@@ -397,7 +397,7 @@ var allTags = union(
 // Tags: merge caller-supplied tags with standard metadata (matching old infra)
 var existingTags = resourceGroup().tags ?? {}
 var resourceTags = union(existingTags, tags, {
-  TemplateName: 'Unified Data Analysis Agents'
+  TemplateName: 'CWYD'
   CreatedBy: createdBy
   DeploymentName: deployment().name
   Type: enablePrivateNetworking ? 'WAF' : 'Non-WAF'
@@ -2100,13 +2100,6 @@ module storage './modules/data/storage-account.bicep' = {
       privateDnsZoneDeployments[dnsZoneIndex.storageQueue]!.outputs.resourceId
       privateDnsZoneDeployments[dnsZoneIndex.storageFile]!.outputs.resourceId
     ] : []
-    queueServices: {
-      queues: [
-        {
-          name: queueName
-        }
-      ]
-    }
   }
 }
 
@@ -2167,6 +2160,7 @@ module openai './modules/ai/ai-services.bicep' = {
     tags: allTags
     kind: 'OpenAI'
     sku: azureOpenAISkuName
+    disableLocalAuth: true
     enablePrivateNetworking: enablePrivateNetworking
     enableTelemetry: enableTelemetry
     privateEndpointSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.backendSubnetResourceId : ''
@@ -2224,10 +2218,10 @@ module computerVision './modules/ai/ai-services.bicep' = if (useAdvancedImagePro
     solutionName: solutionSuffix
     namePrefix: 'cv'
     kind: 'ComputerVision'
+    disableLocalAuth: true
     location: computerVisionLocation != '' ? computerVisionLocation : 'eastus' // Default to eastus if no location provided
     tags: allTags
     sku: computerVisionSkuName
-    disableLocalAuth: true
     enablePrivateNetworking: enablePrivateNetworking
     enableTelemetry: enableTelemetry
     privateEndpointSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.backendSubnetResourceId : ''
@@ -2266,11 +2260,11 @@ module speechService './modules/ai/ai-services.bicep' = {
     location: location
     kind: 'SpeechServices'
     sku: 'S0'
+    disableLocalAuth: false
     enablePrivateNetworking: enablePrivateNetworkingSpeech
     enableTelemetry: enableTelemetry
-    disableLocalAuth: false
-    privateEndpointSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.backendSubnetResourceId : ''
-    privateDnsZoneResourceIds: enablePrivateNetworking ? [
+    privateEndpointSubnetId: enablePrivateNetworkingSpeech ? virtualNetwork!.outputs.backendSubnetResourceId : ''
+    privateDnsZoneResourceIds: enablePrivateNetworkingSpeech ? [
       privateDnsZoneDeployments[dnsZoneIndex.cognitiveServices]!.outputs.resourceId
     ] : []
     roleAssignments: concat(
@@ -2302,6 +2296,7 @@ module formrecognizer './modules/ai/ai-services.bicep' = {
     namePrefix: 'di'
     location: location
     kind: 'FormRecognizer'
+    disableLocalAuth: true
     enablePrivateNetworking: enablePrivateNetworking
     enableTelemetry: enableTelemetry
     privateEndpointSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.backendSubnetResourceId : ''
@@ -2342,6 +2337,7 @@ module contentsafety './modules/ai/ai-services.bicep' = {
     location: location
     tags: allTags
     kind: 'ContentSafety'
+    disableLocalAuth: true
     enablePrivateNetworking: enablePrivateNetworking
     enableTelemetry: enableTelemetry
     privateEndpointSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.backendSubnetResourceId : ''
@@ -2573,6 +2569,10 @@ module adminweb './modules/compute/app-service.bicep' = {
     serverFarmResourceId: webServerFarm.outputs.resourceId
     linuxFxVersion: adminWebLinuxFxVersion
     diagnosticSettings: monitoringDiagnosticSettings
+    managedIdentities: {
+      systemAssigned: true
+      userAssignedResourceIds: [managedIdentityModule.outputs.resourceId]
+    }
     // App settings
     appSettings: union(
       {
@@ -2663,17 +2663,17 @@ module function './modules/compute/function-app.bicep' = {
     tags: union(tags, { 'azd-service-name': hostingModel == 'container' ? 'function-docker' : 'function' })
     kind: hostingModel == 'container' ? 'functionapp,linux,container' : 'functionapp,linux'
     serverFarmResourceId: webServerFarm.outputs.resourceId
-    diagnosticSettings: monitoringDiagnosticSettings
     storageAccountName: storage.outputs.name
     managedIdentities: {
       systemAssigned: true
       userAssignedResourceIds: [managedIdentityModule.outputs.resourceId]
     }
-    userAssignedIdentityClientId: managedIdentityModule.outputs.clientId
+    siteConfig: {
+      alwaysOn: true
+    }
     runtimeStack: 'python'
     runtimeVersion: '3.11'
     dockerFullImageName: hostingModel == 'container' ? '${registryName}.azurecr.io/rag-backend:${appversion}' : ''
-    virtualNetworkSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.backendSubnetResourceId : ''
     appSettings: union(
       {
         AZURE_BLOB_ACCOUNT_NAME: storageAccountName
@@ -2740,21 +2740,50 @@ module function './modules/compute/function-app.bicep' = {
   }
 }
 
+var wookbookContents = loadTextContent('../workbooks/workbook.json')
+var wookbookContentsSubReplaced = replace(wookbookContents, '{subscription-id}', subscription().id)
+var wookbookContentsRGReplaced = replace(wookbookContentsSubReplaced, '{resource-group}', resourceGroup().name)
+var wookbookContentsAppServicePlanReplaced = replace(wookbookContentsRGReplaced, '{app-service-plan}', webServerFarm.outputs.name)
+var wookbookContentsBackendAppServiceReplaced = replace(
+  wookbookContentsAppServicePlanReplaced,
+  '{backend-app-service}',
+  functionName
+)
+var wookbookContentsWebAppServiceReplaced = replace(
+  wookbookContentsBackendAppServiceReplaced,
+  '{web-app-service}',
+  websiteName
+)
+var wookbookContentsAdminAppServiceReplaced = replace(
+  wookbookContentsWebAppServiceReplaced,
+  '{admin-app-service}',
+  adminWebsiteName
+)
+var wookbookContentsEventGridReplaced = replace(
+  wookbookContentsAdminAppServiceReplaced,
+  '{event-grid}',
+  avmEventGridSystemTopic!.outputs.name
+)
+var wookbookContentsLogAnalyticsReplaced = replace(
+  wookbookContentsEventGridReplaced,
+  '{log-analytics-resource-id}',
+  log_analytics!.outputs.resourceId
+)
+var wookbookContentsOpenAIReplaced = replace(wookbookContentsLogAnalyticsReplaced, '{open-ai}', azureOpenAIResourceName)
+var wookbookContentsAISearchReplaced = replace(wookbookContentsOpenAIReplaced, '{ai-search}', azureAISearchName)
+var wookbookContentsStorageAccountReplaced = replace(
+  wookbookContentsAISearchReplaced,
+  '{storage-account}',
+  storageAccountName
+)
 module workbook './modules/monitoring/workbook.bicep' = if (enableMonitoring) {
   name: take('module.monitoring.workbook.${solutionName}', 64)
   scope: resourceGroup()
   params: {
-    workbookDisplayName: workbookDisplayName
+    solutionName: workbookDisplayName
     location: location
-    hostingPlanName: webServerFarm.outputs.name
-    functionName: function.outputs.name
-    websiteName: web.outputs.name
-    adminWebsiteName: adminweb.outputs.name
-    eventGridSystemTopicName: avmEventGridSystemTopic!.outputs.name
-    logAnalyticsResourceId: log_analytics!.outputs.resourceId
-    azureOpenAIResourceName: openai.outputs.name
-    azureAISearchName: databaseType == 'CosmosDB' ? search.name : ''
-    storageAccountName: storage.outputs.name
+    tags: allTags
+    serializedData: wookbookContentsStorageAccountReplaced
   }
 }
 
@@ -2782,13 +2811,11 @@ module avmEventGridSystemTopic './modules/data/event-grid.bicep'= {
     eventSubscriptions: [
       {
         name: 'evts-${solutionSuffix}'
-        deliveryWithResourceIdentity: {
-          destination: {
-            endpointType: 'StorageQueue'
-            properties: {
-              queueName: queueName
-              resourceId: storage.outputs.resourceId
-            }
+        destination: {
+          endpointType: 'StorageQueue'
+          properties: {
+            queueName: queueName
+            resourceId: storage.outputs.resourceId
           }
         }
         eventDeliverySchema: 'EventGridSchema'
@@ -2850,13 +2877,13 @@ var systemAssignedRoleAssignments = union(
   ]
 )
 
-@description('Role assignments applied to the system-assigned identity via AVM module. Objects can include: roleDefinitionId (req), roleName, principalType, resourceId.')
-module systemAssignedIdentityRoleAssignments './modules/identity/role-assignments.bicep' = {
-  name: take('module.resource-role-assignment.system-assigned', 64)
-  params: {
-    roleAssignments: systemAssignedRoleAssignments
-  }
-}
+// @description('Role assignments applied to the system-assigned identity via AVM module. Objects can include: roleDefinitionId (req), roleName, principalType, resourceId.')
+// module systemAssignedIdentityRoleAssignments './modules/identity/role-assignments.bicep' = {
+//   name: take('module.resource-role-assignment.system-assigned', 64)
+//   params: {
+//     roleAssignments: systemAssignedRoleAssignments
+//   }
+// }
 
 var azureOpenAIModelInfo = string({
   model: azureOpenAIModel

@@ -11,10 +11,6 @@
 @description('Optional. Array of role assignments to apply to the system-assigned identity at the Cognitive Services account scope. Each item: { roleDefinitionId: "<GUID or built-in role definition id>" }')
 param roleAssignments array = []
 
-// ============================================================================
-// Role Assignments for Cognitive Services Account
-// ============================================================================
-
 @description('Role assignments applied to the system-assigned identity via AVM module. Objects can include: roleDefinitionId (req), roleName, principalType, resourceId.')
 module roleAssignmentsModule 'br/public:avm/ptn/authorization/resource-role-assignment:0.1.2' = [
   for assignment in roleAssignments: {

@@ -16,20 +16,15 @@ param tags object = {}
 param serverFarmResourceId string
 
 @description('Name of the storage account.')
-param storageAccountName string
+param storageAccountName string = ''
 
 @description('Managed identity configuration.')
-param managedIdentities object = {
-  systemAssigned: true
-}
+param managedIdentities object = { systemAssigned: true }
 
-@description('The client ID of the user assigned identity for the function app. Required for AZURE_CLIENT_ID when using a user assigned managed identity.')
-param userAssignedIdentityClientId string = ''
-
-@description('Docker image name to use for container function apps.')
+@description('Optional. Docker image name to use for container function apps.')
 param dockerFullImageName string = ''
 
-@description('App settings as name-value pairs.')
+@description('App settings as name-value pairs (object).')
 param appSettings object = {}
 
 @description('Site configuration object.')
@@ -41,17 +36,8 @@ param runtimeStack string = 'python'
 @description('Runtime version.')
 param runtimeVersion string = '3.11'
 
-@description('Optional kind for the function app resource. Defaults to functionapp,linux or functionapp,linux,container when a docker image is used.')
-param kind string = ''
-
-@description('Diagnostic settings for monitoring.')
-param diagnosticSettings array = []
-
-@description('Subnet resource ID for VNet integration.')
-param virtualNetworkSubnetId string = ''
-
-@description('Public network access setting.')
-param publicNetworkAccess string = 'Enabled'
+@description('Resource kind for the site (e.g., functionapp,linux).')
+param kind string = 'functionapp,linux'
 
 @description('Enable Azure telemetry collection.')
 param enableTelemetry bool = true
@@ -59,15 +45,13 @@ param enableTelemetry bool = true
 // ============================================================================
 // Variables
 // ============================================================================
-var useDocker = !empty(dockerFullImageName)
-var effectiveKind = !empty(kind) ? kind : (useDocker ? 'functionapp,linux,container' : 'functionapp,linux')
-var linuxFxVersion = useDocker ? dockerFullImageName : '${toUpper(runtimeStack)}|${runtimeVersion}'
-var mergedAppSettings = union({
+var baseAppSettings = {
   AzureWebJobsStorage__accountName: storageAccountName
   FUNCTIONS_EXTENSION_VERSION: '~4'
   FUNCTIONS_WORKER_RUNTIME: runtimeStack
-  AZURE_CLIENT_ID: userAssignedIdentityClientId
-}, appSettings)
+}
+
+var mergedAppSettings = union(baseAppSettings, appSettings, { WEBSITES_ENABLE_APP_SERVICE_STORAGE: 'false' })
 
 // ============================================================================
 // Function App (AVM)
@@ -79,7 +63,7 @@ module functionApp 'br/public:avm/res/web/site:0.23.1' = {
     location: location
     tags: tags
     enableTelemetry: enableTelemetry
-    kind: effectiveKind
+    kind: kind
     serverFarmResourceId: serverFarmResourceId
     storageAccountRequired: false
     managedIdentities: managedIdentities
@@ -90,11 +74,8 @@ module functionApp 'br/public:avm/res/web/site:0.23.1' = {
       }
     ]
     siteConfig: union({
-      linuxFxVersion: linuxFxVersion
+      linuxFxVersion: !empty(dockerFullImageName) ? 'DOCKER|${dockerFullImageName}' : '${toUpper(runtimeStack)}|${runtimeVersion}'
     }, siteConfig)
-    publicNetworkAccess: publicNetworkAccess
-    virtualNetworkSubnetResourceId: !empty(virtualNetworkSubnetId) ? virtualNetworkSubnetId : null
-    diagnosticSettings: !empty(diagnosticSettings) ? diagnosticSettings : []
   }
 }
 

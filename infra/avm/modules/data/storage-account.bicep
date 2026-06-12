@@ -44,7 +44,7 @@ param containers array = [
   }
 ]
 
-@description('Queue services to create.')
+@description('Optional. Storage queue service settings to create queues or diagnostics.')
 param queueServices object = {}
 
 // --- WAF: Monitoring ---
