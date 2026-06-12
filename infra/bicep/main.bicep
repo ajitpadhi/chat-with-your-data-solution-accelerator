@@ -271,9 +271,6 @@ var contentSafetyName string = 'cs-${solutionSuffix}'
 @description('Azure Speech Service Name.')
 var speechServiceName string = 'spch-${solutionSuffix}'
 
-@description('Log Analytics Name.')
-var logAnalyticsName string = 'log-${solutionSuffix}'
-
 @description('Optional. A new GUID string generated for this deployment. This can be used for unique naming if needed.')
 param newGuidString string = newGuid()
 
@@ -312,29 +309,6 @@ param enablePurgeProtection bool = false
 @description('Optional. Enable monitoring applicable resources, aligned with the Well Architected Framework recommendations. This setting enables Application Insights and Log Analytics and configures all the resources applicable resources to send logs. Defaults to false.')
 param enableMonitoring bool = false
 
-@description('Optional. Enable scalability for applicable resources, aligned with the Well Architected Framework recommendations. Defaults to false.')
-param enableScalability bool = false
-
-@description('Optional. Enable redundancy for applicable resources, aligned with the Well Architected Framework recommendations. Defaults to false.')
-param enableRedundancy bool = false
-
-@description('Optional. Enable private networking for applicable resources, aligned with the Well Architected Framework recommendations. Defaults to false.')
-param enablePrivateNetworking bool = false
-
-@description('Optional. Size of the Jumpbox Virtual Machine when created. Set to custom value if enablePrivateNetworking is true.')
-param vmSize string = 'Standard_D2s_v5'
-
-@description('Optional. The user name for the administrator account of the virtual machine. Allows to customize credentials if `enablePrivateNetworking` is set to true.')
-@secure()
-param virtualMachineAdminUsername string = ''
-
-@description('Optional. The password for the administrator account of the virtual machine. Allows to customize credentials if `enablePrivateNetworking` is set to true.')
-@secure()
-param virtualMachineAdminPassword string = ''
-
-@description('Optional. Enable/Disable usage telemetry for module.')
-param enableTelemetry bool = true
-
 var blobContainerName = 'documents'
 var queueName = 'doc-processing'
 var clientKey = '${uniqueString(guid(subscription().id, deployment().name))}${newGuidString}'
@@ -362,55 +336,21 @@ param createdBy string = contains(deployer(), 'userPrincipalName')
   ? split(deployer().userPrincipalName, '@')[0]
   : deployer().objectId
 
+// ============== //
+// Resources      //
+// ============== //
+
 // ========== Resource Group Tag ========== //
 resource resourceGroupTags 'Microsoft.Resources/tags@2025-04-01' = {
   name: 'default'
   properties: {
     tags: union(existingTags, allTags, {
       TemplateName: 'CWYD'
-      Type: enablePrivateNetworking ? 'WAF' : 'Non-WAF'
+      Type: 'Non-WAF'
       CreatedBy: createdBy
     })
   }
 }
-
-// Region pairs list based on article in [Azure Database for MySQL Flexible Server - Azure Regions](https://learn.microsoft.com/azure/mysql/flexible-server/overview#azure-regions) for supported high availability regions for CosmosDB.
-var cosmosDbZoneRedundantHaRegionPairs = {
-  australiaeast: 'uksouth'
-  centralus: 'eastus2'
-  eastasia: 'southeastasia'
-  eastus: 'centralus'
-  eastus2: 'centralus'
-  japaneast: 'australiaeast'
-  northeurope: 'westeurope'
-  southeastasia: 'eastasia'
-  uksouth: 'westeurope'
-  westeurope: 'northeurope'
-}
-// Paired location calculated based on 'location' parameter. This location will be used by applicable resources if `enableScalability` is set to `true`
-var cosmosDbHaLocation = cosmosDbZoneRedundantHaRegionPairs[location]
-
-// Replica regions list based on article in [Azure regions list](https://learn.microsoft.com/azure/reliability/regions-list) and [Enhance resilience by replicating your Log Analytics workspace across regions](https://learn.microsoft.com/azure/azure-monitor/logs/workspace-replication#supported-regions) for supported regions for Log Analytics Workspace.
-var replicaRegionPairs = {
-  australiaeast: 'australiasoutheast'
-  centralus: 'westus'
-  eastasia: 'japaneast'
-  eastus: 'centralus'
-  eastus2: 'centralus'
-  japaneast: 'eastasia'
-  northeurope: 'westeurope'
-  southeastasia: 'eastasia'
-  uksouth: 'westeurope'
-  westeurope: 'northeurope'
-}
-var replicaLocation = replicaRegionPairs[location]
-
-// WAF: Diagnostic settings helper — reused across modules
-var monitoringDiagnosticSettings = enableMonitoring ? [{ workspaceResourceId: logAnalyticsWorkspaceResourceId }] : []
-
-// ============== //
-// Resources      //
-// ============== //
 
 // ========== Managed Identity ========== //
 module managedIdentityModule './modules/identity/managed-identity.bicep' = {
@@ -431,6 +371,18 @@ resource existingLogAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces
   scope: resourceGroup(split(existingLogAnalyticsWorkspaceId, '/')[2], split(existingLogAnalyticsWorkspaceId, '/')[4])
 }
 
+// Resolve workspace resource ID and name — existing or new
+var logAnalyticsWorkspaceResourceId = useExistingLogAnalytics
+  ? existingLogAnalyticsWorkspace.id
+  : (enableMonitoring ? log_analytics!.outputs.resourceId : '')
+var logAnalyticsWorkspaceName = useExistingLogAnalytics
+  ? split(existingLogAnalyticsWorkspaceId, '/')[8]
+  : (enableMonitoring ? log_analytics!.outputs.name : '')
+
+// WAF: Diagnostic settings helper — reused across modules
+var monitoringDiagnosticSettings = enableMonitoring ? [{ workspaceResourceId: logAnalyticsWorkspaceResourceId }] : []
+
+
 // ========== Log Analytics module ========== //
 module log_analytics './modules/monitoring/log-analytics.bicep' = if (enableMonitoring && !useExistingLogAnalytics) {
   name: take('module.log-analytics.${solutionName}', 64)
@@ -440,14 +392,6 @@ module log_analytics './modules/monitoring/log-analytics.bicep' = if (enableMoni
   }
   scope: resourceGroup(resourceGroup().name)
 }
-
-// Resolve workspace resource ID and name — existing or new
-var logAnalyticsWorkspaceResourceId = useExistingLogAnalytics
-  ? existingLogAnalyticsWorkspace.id
-  : (enableMonitoring ? log_analytics!.outputs.resourceId : '')
-var logAnalyticsWorkspaceName = useExistingLogAnalytics
-  ? split(existingLogAnalyticsWorkspaceId, '/')[8]
-  : (enableMonitoring ? log_analytics!.outputs.name : '')
 
 // ========== Application Insights module ========== //
 module app_insights './modules/monitoring/app-insights.bicep' = if (enableMonitoring) {
@@ -1694,105 +1638,29 @@ module cosmosDBModule './modules/data/cosmos-db-nosql.bicep' = if (databaseType 
     solutionName: solutionSuffix
     location: location
     tags: tags
-    enableTelemetry: enableTelemetry
-    databaseAccountOfferType: 'Standard'
-    sqlDatabases: [
-      {
-        name: cosmosDbName
-        containers: [
-          {
-            name: cosmosDbContainerName
-            paths: [
-              '/userId'
-            ]
-            kind: 'Hash'
-            version: 2
-          }
-        ]
-      }
-    ]
-    dataPlaneRoleDefinitions: [
-      {
-        roleName: 'Cosmos DB SQL Data Contributor'
-        dataActions: [
-          'Microsoft.DocumentDB/databaseAccounts/readMetadata'
-          'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/*'
-          'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/items/*'
-        ]
-        assignments: [{ principalId: managedIdentityModule.outputs.principalId }]
-      }
-    ]
-    diagnosticSettings: monitoringDiagnosticSettings
-    networkRestrictions: {
-      networkAclBypass: 'None'
-      publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
-    }
-    zoneRedundant: enableRedundancy ? true : false
-    capabilitiesToAdd: enableRedundancy ? null : ['EnableServerless']
-    automaticFailover: enableRedundancy ? true : false
-    failoverLocations: enableRedundancy
-      ? [
-          {
-            failoverPriority: 0
-            isZoneRedundant: true
-            locationName: location
-          }
-          {
-            failoverPriority: 1
-            isZoneRedundant: true
-            locationName: cosmosDbHaLocation
-          }
-        ]
-      : [
-          {
-            locationName: location
-            failoverPriority: 0
-            isZoneRedundant: false
-          }
-        ]
+    // dataPlaneRoleDefinitions: [
+    //   {
+    //     roleName: 'Cosmos DB SQL Data Contributor'
+    //     dataActions: [
+    //       'Microsoft.DocumentDB/databaseAccounts/readMetadata'
+    //       'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/*'
+    //       'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/items/*'
+    //     ]
+    //     assignments: [{ principalId: managedIdentityModule.outputs.principalId }]
+    //   }
+    // ]
   }
 }
 
-var allowAllIPsFirewall = false
-var allowAzureIPsFirewall = true
 var postgresResourceName = '${azurePostgresDBAccountName}-postgres'
 var postgresDBName = 'postgres'
-module postgresDBModule 'br/public:avm/res/db-for-postgre-sql/flexible-server:0.13.1' = if (databaseType == 'PostgreSQL') {
-  name: take('avm.res.db-for-postgre-sql.flexible-server.${azurePostgresDBAccountName}', 64)
+module postgresDBModule './modules/data/postgresql-flexible-server.bicep' = if (databaseType == 'PostgreSQL') {
+  name: take('module.postgre-sql.flexible-server.${solutionName}', 64)
   params: {
-    name: postgresResourceName
+    solutionName: solutionSuffix
     location: location
     tags: tags
-    enableTelemetry: enableTelemetry
-
-    diagnosticSettings: enableMonitoring ? [{ workspaceResourceId: monitoring!.outputs.logAnalyticsWorkspaceId }] : null
-
-    skuName: enableScalability ? 'Standard_D2s_v3' : 'Standard_B1ms'
-    tier: enableScalability ? 'GeneralPurpose' : 'Burstable'
-    storageSizeGB: 32
     version: '16'
-    availabilityZone: 1
-    highAvailability: enableRedundancy ? 'ZoneRedundant' : 'Disabled'
-    highAvailabilityZone: enableRedundancy ? 2 : -1
-    publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
-    privateEndpoints: enablePrivateNetworking
-      ? [
-          {
-            name: 'pep-${postgresResourceName}'
-            customNetworkInterfaceName: 'nic-${postgresResourceName}'
-            privateDnsZoneGroup: {
-              privateDnsZoneGroupConfigs: [
-                {
-                  privateDnsZoneResourceId: avmPrivateDnsZones[dnsZoneIndex.postgresDB]!.outputs.resourceId
-                }
-              ]
-            }
-            service: 'postgresqlServer'
-            subnetResourceId: virtualNetwork!.outputs.pepsSubnetResourceId
-          }
-        ]
-      : []
-
     administrators: concat(
       managedIdentityModule.outputs.principalId != ''
         ? [
@@ -1813,29 +1681,6 @@ module postgresDBModule 'br/public:avm/res/db-for-postgre-sql/flexible-server:0.
           ]
         : []
     )
-
-    firewallRules: enablePrivateNetworking
-      ? []
-      : concat(
-          allowAllIPsFirewall
-            ? [
-                {
-                  name: 'allow-all-IPs'
-                  startIpAddress: '0.0.0.0'
-                  endIpAddress: '255.255.255.255'
-                }
-              ]
-            : [],
-          allowAzureIPsFirewall
-            ? [
-                {
-                  name: 'allow-all-azure-internal-IPs'
-                  startIpAddress: '0.0.0.0'
-                  endIpAddress: '0.0.0.0'
-                }
-              ]
-            : []
-        )
     configurations: [
       {
         name: 'azure.extensions'
@@ -1847,43 +1692,16 @@ module postgresDBModule 'br/public:avm/res/db-for-postgre-sql/flexible-server:0.
 }
 
 // Store secrets in a keyvault
-var keyVaultName = 'kv-${solutionSuffix}'
-module keyvault './modules/key-vault/vault/vault.bicep' = {
-  name: take('avm.res.key-vault.vault.${keyVaultName}', 64)
+module keyvault './modules/security/key-vault.bicep' = {
+  name: take('module.key-vault.${solutionName}', 64)
   params: {
-    name: keyVaultName
+    solutionName: solutionSuffix
     location: location
     tags: tags
-    sku: 'standard'
-    publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
-    networkAcls: {
-      defaultAction: 'Allow'
-    }
     enablePurgeProtection: enablePurgeProtection
-    enableVaultForDeployment: true
-    enableVaultForDiskEncryption: true
-    enableVaultForTemplateDeployment: true
     enableRbacAuthorization: true
     enableSoftDelete: true
     softDeleteRetentionInDays: 7
-    diagnosticSettings: enableMonitoring ? [{ workspaceResourceId: monitoring!.outputs.logAnalyticsWorkspaceId }] : null
-    privateEndpoints: enablePrivateNetworking
-      ? [
-          {
-            name: 'pep-${keyVaultName}'
-            customNetworkInterfaceName: 'nic-${keyVaultName}'
-            privateDnsZoneGroup: {
-              privateDnsZoneGroupConfigs: [
-                {
-                  privateDnsZoneResourceId: avmPrivateDnsZones[dnsZoneIndex.keyVault]!.outputs.resourceId
-                }
-              ]
-            }
-            service: 'vault'
-            subnetResourceId: virtualNetwork!.outputs.pepsSubnetResourceId
-          }
-        ]
-      : []
     roleAssignments: concat(
       managedIdentityModule.outputs.principalId != ''
         ? [
@@ -1909,7 +1727,6 @@ module keyvault './modules/key-vault/vault/vault.bicep' = {
         value: clientKey
       }
     ]
-    enableTelemetry: enableTelemetry
   }
 }
 

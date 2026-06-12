@@ -2074,6 +2074,16 @@ module storage './modules/data/storage-account.bicep' = {
           publicAccess: 'None'
         }
       ]
+    queueServices: {
+      queues: [
+        {
+          name: 'doc-processing'
+        }
+        {
+          name: 'doc-processing-poison'
+        }
+      ]
+    }
     roleAssignments: [
       {
         principalId: managedIdentityModule.outputs.principalId
@@ -2161,6 +2171,7 @@ module openai './modules/ai/ai-services.bicep' = {
     kind: 'OpenAI'
     sku: azureOpenAISkuName
     disableLocalAuth: true
+    userAssignedResourceId: managedIdentityModule.outputs.resourceId
     enablePrivateNetworking: enablePrivateNetworking
     enableTelemetry: enableTelemetry
     privateEndpointSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.backendSubnetResourceId : ''
@@ -2219,6 +2230,7 @@ module computerVision './modules/ai/ai-services.bicep' = if (useAdvancedImagePro
     namePrefix: 'cv'
     kind: 'ComputerVision'
     disableLocalAuth: true
+    userAssignedResourceId: managedIdentityModule.outputs.resourceId
     location: computerVisionLocation != '' ? computerVisionLocation : 'eastus' // Default to eastus if no location provided
     tags: allTags
     sku: computerVisionSkuName
@@ -2261,6 +2273,8 @@ module speechService './modules/ai/ai-services.bicep' = {
     kind: 'SpeechServices'
     sku: 'S0'
     disableLocalAuth: false
+    userAssignedResourceId: managedIdentityModule.outputs.resourceId
+    enableSystemAssigned: false
     enablePrivateNetworking: enablePrivateNetworkingSpeech
     enableTelemetry: enableTelemetry
     privateEndpointSubnetId: enablePrivateNetworkingSpeech ? virtualNetwork!.outputs.backendSubnetResourceId : ''
@@ -2297,6 +2311,7 @@ module formrecognizer './modules/ai/ai-services.bicep' = {
     location: location
     kind: 'FormRecognizer'
     disableLocalAuth: true
+    userAssignedResourceId: managedIdentityModule.outputs.resourceId
     enablePrivateNetworking: enablePrivateNetworking
     enableTelemetry: enableTelemetry
     privateEndpointSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.backendSubnetResourceId : ''
@@ -2338,6 +2353,7 @@ module contentsafety './modules/ai/ai-services.bicep' = {
     tags: allTags
     kind: 'ContentSafety'
     disableLocalAuth: true
+    userAssignedResourceId: managedIdentityModule.outputs.resourceId
     enablePrivateNetworking: enablePrivateNetworking
     enableTelemetry: enableTelemetry
     privateEndpointSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.backendSubnetResourceId : ''
@@ -2877,13 +2893,13 @@ var systemAssignedRoleAssignments = union(
   ]
 )
 
-// @description('Role assignments applied to the system-assigned identity via AVM module. Objects can include: roleDefinitionId (req), roleName, principalType, resourceId.')
-// module systemAssignedIdentityRoleAssignments './modules/identity/role-assignments.bicep' = {
-//   name: take('module.resource-role-assignment.system-assigned', 64)
-//   params: {
-//     roleAssignments: systemAssignedRoleAssignments
-//   }
-// }
+@description('Role assignments applied to the system-assigned identity via AVM module. Objects can include: roleDefinitionId (req), roleName, principalType, resourceId.')
+module systemAssignedIdentityRoleAssignments './modules/identity/role-assignments.bicep' = {
+  name: take('module.resource-role-assignment.system-assigned', 64)
+  params: {
+    roleAssignments: systemAssignedRoleAssignments
+  }
+}
 
 var azureOpenAIModelInfo = string({
   model: azureOpenAIModel

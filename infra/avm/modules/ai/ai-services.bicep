@@ -47,6 +47,12 @@ param customSubDomainName string = ''
 @description('Disable local (key-based) authentication.')
 param disableLocalAuth bool = true
 
+@description('Optional. User assigned managed identity resource ID.')
+param userAssignedResourceId string = ''
+
+@description('Optional. Enable system-assigned managed identity when a user-assigned identity is provided.')
+param enableSystemAssigned bool = true
+
 @description('Public network access setting.')
 @allowed(['Enabled', 'Disabled'])
 param publicNetworkAccess string = 'Enabled'
@@ -87,7 +93,12 @@ module aiService 'br/public:avm/res/cognitive-services/account:0.14.2' = {
     sku: sku
     customSubDomainName: effectiveSubDomain
     disableLocalAuth: disableLocalAuth
-    managedIdentities: { systemAssigned: true }
+    managedIdentities: !empty(userAssignedResourceId)
+      ? {
+          systemAssigned: enableSystemAssigned
+          userAssignedResourceIds: [userAssignedResourceId]
+        }
+      : { systemAssigned: enableSystemAssigned }
     publicNetworkAccess: publicNetworkAccess
     diagnosticSettings: !empty(diagnosticSettings) ? diagnosticSettings : []
     roleAssignments: !empty(roleAssignments) ? roleAssignments : []
