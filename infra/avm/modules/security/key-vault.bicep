@@ -19,6 +19,11 @@ param tags object = {}
 @allowed(['standard', 'premium'])
 param sku string = 'standard'
 
+@description('Optional. Rules governing the accessibility of the resource from specific network locations.')
+param networkAcls object = {
+  defaultAction: 'Allow'
+}
+
 @description('Enable RBAC authorization.')
 param enableRbacAuthorization bool = true
 
@@ -41,6 +46,9 @@ param secrets array = []
 @description('Enable Azure telemetry collection.')
 param enableTelemetry bool = true
 
+@description('Optional. The diagnostic settings of the service.')
+param diagnosticSettings array = []
+
 @description('Role assignments.')
 param roleAssignments array = []
 
@@ -52,6 +60,12 @@ param privateEndpointSubnetId string = ''
 
 @description('Private DNS zone resource IDs.')
 param privateDnsZoneResourceIds array = []
+
+@description('Id of the user or app to assign application roles')
+param principalId string = ''
+
+@description('Managed identity')
+param managedIdentityObjectId string = ''
 
 // ============================================================================
 // Key Vault (AVM)
@@ -87,11 +101,47 @@ module keyVault 'br/public:avm/res/key-vault/vault:0.12.1' = {
     enableRbacAuthorization: enableRbacAuthorization
     enableSoftDelete: enableSoftDelete
     softDeleteRetentionInDays: softDeleteRetentionInDays
+    diagnosticSettings: diagnosticSettings
     enablePurgeProtection: enablePurgeProtection
     publicNetworkAccess: publicNetworkAccess
+    networkAcls: networkAcls
     roleAssignments: !empty(roleAssignments) ? roleAssignments : []
     secrets: !empty(secrets) ? secretItems : []
     privateEndpoints: privateEndpointConfig
+    accessPolicies: concat(
+      managedIdentityObjectId != '' ? [
+        {
+          objectId: managedIdentityObjectId
+          permissions: {
+            keys: [
+              'get'
+              'list'
+            ]
+            secrets: [
+              'get'
+              'list'
+            ]
+          }
+          tenantId: subscription().tenantId
+        }
+      ] : [],
+      principalId != '' ? [
+        {
+          objectId: principalId
+          permissions: {
+            keys: [
+              'get'
+              'list'
+            ]
+            secrets: [
+              'get'
+              'list'
+            ]
+          }
+          tenantId: subscription().tenantId
+        }
+      ] : []
+    )
   }
 }
 
@@ -107,3 +157,6 @@ output uri string = keyVault.outputs.uri
 
 @description('The resource ID of the key vault.')
 output resourceId string = keyVault.outputs.resourceId
+
+@description('System-assigned identity principal ID.')
+output identityPrincipalId string = keyVault.outputs.?systemAssignedMIPrincipalId ?? ''

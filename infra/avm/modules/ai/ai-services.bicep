@@ -66,6 +66,12 @@ param diagnosticSettings array = []
 @description('Optional. Role assignments for the resource.')
 param roleAssignments array = []
 
+@description('Optional. List of allowed FQDN.')
+param allowedFqdnList array?
+
+@description('Optional. Resource ID of the user-assigned managed identity to be used by the Cognitive Services resource.')
+param userAssignedResourceId string = ''
+
 var effectiveSubDomain = !empty(customSubDomainName) ? customSubDomainName : name
 
 var privateDnsZoneConfigs = [for (zoneId, i) in privateDnsZoneResourceIds: {
@@ -87,10 +93,17 @@ module aiService 'br/public:avm/res/cognitive-services/account:0.14.2' = {
     sku: sku
     customSubDomainName: effectiveSubDomain
     disableLocalAuth: disableLocalAuth
-    managedIdentities: { systemAssigned: true }
+    managedIdentities: { systemAssigned: true, userAssignedResourceIds: !empty(userAssignedResourceId) ? [userAssignedResourceId] : [] }
     publicNetworkAccess: publicNetworkAccess
-    diagnosticSettings: !empty(diagnosticSettings) ? diagnosticSettings : []
+    diagnosticSettings: diagnosticSettings
     roleAssignments: !empty(roleAssignments) ? roleAssignments : []
+    allowedFqdnList: allowedFqdnList
+    networkAcls: {
+      bypass: kind == 'OpenAI' || kind == 'AIServices' ? 'AzureServices' : null
+      defaultAction: enablePrivateNetworking ? 'Deny' : 'Allow'
+      virtualNetworkRules: []
+      ipRules: []
+    }
     privateEndpoints: enablePrivateNetworking ? [
       {
         name: 'pep-${name}'

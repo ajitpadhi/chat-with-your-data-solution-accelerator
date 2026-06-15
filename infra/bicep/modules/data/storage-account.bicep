@@ -40,6 +40,15 @@ param containers array = [
   }
 ]
 
+@description('Optional. Storage queue service settings to create queues or diagnostics.')
+param queues array = []
+
+@description('Network ACLs for the storage account.')
+param networkAcls object = {
+  defaultAction: 'Allow'
+  bypass: 'AzureServices'
+}
+
 // ============================================================================
 // Resource Deployment
 // ============================================================================
@@ -57,6 +66,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2025-08-01' = {
     allowSharedKeyAccess: allowSharedKeyAccess
     minimumTlsVersion: 'TLS1_2'
     supportsHttpsTrafficOnly: true
+    networkAcls: networkAcls
     encryption: {
       services: {
         blob: {
@@ -70,20 +80,39 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2025-08-01' = {
       requireInfrastructureEncryption: true
     }
   }
-}
 
-resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2025-08-01' = {
-  parent: storageAccount
-  name: 'default'
-}
-
-resource blobContainers 'Microsoft.Storage/storageAccounts/blobServices/containers@2025-08-01' = [for container in containers: {
-  parent: blobService
-  name: container.name
-  properties: {
-    publicAccess: container.publicAccess
+  resource blobServices 'blobServices' = if (!empty(containers)) {
+    name: 'default'
+    properties: {
+      deleteRetentionPolicy: {}
+    }
+    resource container 'containers' = [
+      for container in containers: {
+        name: container.name
+        properties: {
+          publicAccess: contains(container, 'publicAccess') ? container.publicAccess : 'None'
+        }
+      }
+    ]
   }
-}]
+
+  resource queueServices 'queueServices' = if (!empty(queues)) {
+    name: 'default'
+    properties: {
+      cors: {
+        corsRules: []
+      }
+    }
+    resource queue 'queues' = [
+      for queue in queues: {
+        name: queue.name
+        properties: {
+          metadata: {}
+        }
+      }
+    ]
+  }
+}
 
 // ============================================================================
 // Outputs

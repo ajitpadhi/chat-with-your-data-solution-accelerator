@@ -28,7 +28,7 @@ param managedIdentities object = {
 }
 
 @description('App settings as name-value pairs.')
-param appSettings array = []
+param appSettings object = {}
 
 @description('Site configuration object.')
 param siteConfig object = {}
@@ -50,14 +50,13 @@ var identityConfig = empty(managedIdentities) ? null : {
 var storageConnectionString = 'DefaultEndpointsProtocol=https;AccountName=${storageAccountName};AccountKey=${listKeys(storageAccountResourceId, '2023-05-01').keys[0].value};EndpointSuffix=${environment().suffixes.storage}'
 var linuxFxVersion = '${toUpper(runtimeStack)}|${runtimeVersion}'
 
-var baseSettings = [
-  { name: 'AzureWebJobsStorage', value: storageConnectionString }
-  { name: 'FUNCTIONS_EXTENSION_VERSION', value: '~4' }
-  { name: 'FUNCTIONS_WORKER_RUNTIME', value: toLower(runtimeStack) }
+var mergedSettings = union(
+  appSettings,
+  { name: 'AzureWebJobsStorage', value: storageConnectionString },
+  { name: 'FUNCTIONS_EXTENSION_VERSION', value: '~4' },
+  { name: 'FUNCTIONS_WORKER_RUNTIME', value: toLower(runtimeStack) },
   { name: 'WEBSITE_RUN_FROM_PACKAGE', value: '1' }
-]
-
-var mergedSettings = concat(baseSettings, appSettings)
+)
 
 var defaultSiteConfig = {
   linuxFxVersion: linuxFxVersion

@@ -46,6 +46,9 @@ param disableLocalAuth bool = true
 @description('Managed identity type for the search service.')
 param managedIdentityType string = 'SystemAssigned'
 
+@description('Optional. Resource ID of the user-assigned managed identity to be used by the Cognitive Services resource.')
+param userAssignedResourceId string = ''
+
 @description('Public network access setting.')
 param publicNetworkAccess string = 'Enabled'
 
@@ -94,7 +97,7 @@ module searchServiceUpdate 'br/public:avm/res/search/search-service:0.12.0' = {
     disableLocalAuth: disableLocalAuth
     publicNetworkAccess: publicNetworkAccess
     managedIdentities: {
-      systemAssigned: managedIdentityType == 'SystemAssigned'
+      systemAssigned: managedIdentityType == 'SystemAssigned', userAssignedResourceIds: !empty(userAssignedResourceId) ? [userAssignedResourceId] : []
     }
     diagnosticSettings: !empty(diagnosticSettings) ? diagnosticSettings : []
     privateEndpoints: privateEndpoints

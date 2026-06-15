@@ -42,16 +42,6 @@ param location string
 @description('Optional. Existing Log Analytics Workspace Resource ID.')
 param existingLogAnalyticsWorkspaceId string = ''
 
-var solutionSuffix = toLower(trim(replace(
-  replace(
-    replace(replace(replace(replace('${solutionName}${solutionUniqueText}', '-', ''), '_', ''), '.', ''), '/', ''),
-    ' ',
-    ''
-  ),
-  '*',
-  ''
-)))
-
 @description('Optional. The pricing tier for the App Service plan.')
 @allowed([
   'B2'
@@ -345,11 +335,6 @@ var openAISystemPrompts = {
   SEMANTIC_KERNEL_SYSTEM_PROMPT: semanticKernelSystemPrompt
 }
 
-@description('Optional. Created by user name.')
-param createdBy string = contains(deployer(), 'userPrincipalName')
-  ? split(deployer().userPrincipalName, '@')[0]
-  : deployer().objectId
-
 // ============================================================================
 // Derived Variables
 // ============================================================================
@@ -436,7 +421,6 @@ module avmDeployment './avm/main.bicep' = if (isAvm) {
     vmAdminUsername: virtualMachineAdminUsername
     vmAdminPassword: virtualMachineAdminPassword
     enableTelemetry: enableTelemetry
-    createdBy: createdBy
     appversion: appversion
     openAISystemPrompts: openAISystemPrompts
   }

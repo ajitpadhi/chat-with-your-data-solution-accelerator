@@ -62,9 +62,6 @@ param databaseType string = 'PostgreSQL'
 @description('Azure Cosmos DB Account Name.')
 var azureCosmosDBAccountName string = 'cosmos-${solutionSuffix}'
 
-@description('Azure Postgres DB Account Name.')
-var azurePostgresDBAccountName string = 'psql-${solutionSuffix}'
-
 @description('Name of Web App.')
 var websiteName string = 'app-${solutionSuffix}'
 
@@ -370,12 +367,10 @@ param vmAdminPassword string = ''
 @description('Optional. Enable/Disable usage telemetry for module.')
 param enableTelemetry bool = true
 
-@description('Optional. Created by user name.')
-param createdBy string
-
 @description('Optional. Image version tag to use.')
 param appversion string
 
+var createdBy = contains(deployerInfo, 'userPrincipalName') ? split(deployerInfo.userPrincipalName, '@')[0] : deployerInfo.objectId
 var deployerInfo = deployer()
 var deployingUserPrincipalId = deployerInfo.objectId
 var blobContainerName = 'documents'
@@ -505,10 +500,10 @@ resource resourceGroupTags 'Microsoft.Resources/tags@2025-04-01' = {
 // ============== //
 
 // ========== Managed Identity ========== //
-module managedIdentityModule './modules/identity/managed-identity.bicep' = if (databaseType == 'PostgreSQL') {
+module managedIdentityModule './modules/identity/managed-identity.bicep' = {
   name: take('module.managed-identity.user-assigned-identity.${solutionName}', 64)
   params: {
-    solutionName: solutionName
+    solutionName: solutionSuffix
     location: location
     tags: tags
     enableTelemetry: enableTelemetry
@@ -553,29 +548,45 @@ module log_analytics './modules/monitoring/log-analytics.bicep' = if (enableMoni
     location: location
     tags: tags
     enableTelemetry: enableTelemetry
-    retentionInDays: 365
     publicNetworkAccessForIngestion: enablePrivateNetworking ? 'Disabled' : 'Enabled'
     publicNetworkAccessForQuery: enablePrivateNetworking ? 'Disabled' : 'Enabled'
     enableReplication: enableRedundancy
-    replicationLocation: enableRedundancy ? replicaLocation : ''
-    dailyQuotaGb: enableRedundancy ? '150' : ''
-    dataSources: enablePrivateNetworking ? [
-      {
-        tags: tags
-        eventLogName: 'Application'
-        eventTypes: [{ eventType: 'Error' }, { eventType: 'Warning' }, { eventType: 'Information' }]
-        kind: 'WindowsEvent'
-        name: 'applicationEvent'
-      }
-      {
-        counterName: '% Processor Time'
-        instanceName: '*'
-        intervalSeconds: 60
-        kind: 'WindowsPerformanceCounter'
-        name: 'windowsPerfCounter1'
-        objectName: 'Processor'
-      }
-    ] : []
+    replicationLocation: replicaLocation
+    dailyQuotaGb: enableRedundancy ? '10' : ''
+    dataSources: enablePrivateNetworking
+      ? [
+          {
+            tags: tags
+            eventLogName: 'Application'
+            eventTypes: [
+              {
+                eventType: 'Error'
+              }
+              {
+                eventType: 'Warning'
+              }
+              {
+                eventType: 'Information'
+              }
+            ]
+            kind: 'WindowsEvent'
+            name: 'applicationEvent'
+          }
+          {
+            counterName: '% Processor Time'
+            instanceName: '*'
+            intervalSeconds: 60
+            kind: 'WindowsPerformanceCounter'
+            name: 'windowsPerfCounter1'
+            objectName: 'Processor'
+          }
+          {
+            kind: 'IISLogs'
+            name: 'sampleIISLog1'
+            state: 'OnPremiseEnabled'
+          }
+        ]
+      : null
   }
 }
 
@@ -595,8 +606,6 @@ module app_insights './modules/monitoring/app-insights.bicep' = if (enableMonito
     tags: tags
     enableTelemetry: enableTelemetry
     workspaceResourceId: logAnalyticsWorkspaceResourceId
-    retentionInDays: 365
-    disableIpMasking: false
   }
 }
 
@@ -1973,10 +1982,6 @@ module cosmosDBModule './modules/data/cosmos-db-nosql.bicep' = if (databaseType 
     location: location
     tags: tags
     enableTelemetry: enableTelemetry
-    databaseName: 'db_conversation_history'
-    containers: [
-      { name: 'conversations', partitionKeyPath: '/userId' }
-    ]
     publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
     diagnosticSettings: monitoringDiagnosticSettings
     zoneRedundant: enableRedundancy
@@ -1987,21 +1992,20 @@ module cosmosDBModule './modules/data/cosmos-db-nosql.bicep' = if (databaseType 
     privateDnsZoneResourceIds: enablePrivateNetworking ? [
       privateDnsZoneDeployments[dnsZoneIndex.cosmosDB]!.outputs.resourceId
     ] : []
-    // sqlRoleDefinitions: [
-    //   {
-    //     roleName: 'Cosmos DB SQL Data Contributor'
-    //     dataActions: [
-    //       'Microsoft.DocumentDB/databaseAccounts/readMetadata'
-    //       'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/*'
-    //       'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/items/*'
-    //     ]
-    //     assignments: [{ principalId: managedIdentityModule.outputs.principalId }]
-    //   }
-    // ]
+    sqlRoleDefinitions: [
+      {
+        roleName: 'Cosmos DB SQL Data Contributor'
+        dataActions: [
+          'Microsoft.DocumentDB/databaseAccounts/readMetadata'
+          'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/*'
+          'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/items/*'
+        ]
+        assignments: [{ principalId: managedIdentityModule.outputs.principalId }]
+      }
+    ]
   }
 }
 
-var postgresResourceName = '${azurePostgresDBAccountName}-postgres'
 var postgresDBName = 'postgres'
 module postgresDBModule './modules/data/postgresql-flexible-server.bicep' = if (databaseType == 'PostgreSQL') {
   name: take('module.postgre-sql.flexible-server.${solutionName}', 64)
@@ -2013,9 +2017,6 @@ module postgresDBModule './modules/data/postgresql-flexible-server.bicep' = if (
     diagnosticSettings: monitoringDiagnosticSettings
     skuName: enableScalability ? 'Standard_D2s_v3' : 'Standard_B1ms'
     skuTier: enableScalability ? 'GeneralPurpose' : 'Burstable'
-    storageSizeGB: 32
-    version: '16'
-    availabilityZone: 1
     highAvailability: enableRedundancy ? 'ZoneRedundant' : 'Disabled'
     highAvailabilityZone: enableRedundancy ? 2 : -1
     publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
@@ -2084,23 +2085,23 @@ module storage './modules/data/storage-account.bicep' = {
         }
       ]
     }
-    // roleAssignments: [
-    //   {
-    //     principalId: managedIdentityModule.outputs.principalId
-    //     roleDefinitionIdOrName: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
-    //     principalType: 'ServicePrincipal'
-    //   }
-    //   {
-    //     principalId: managedIdentityModule.outputs.principalId
-    //     roleDefinitionIdOrName: '974c5e8b-45b9-4653-ba55-5f855dd0fb88' // Storage Queue Data Contributor
-    //     principalType: 'ServicePrincipal'
-    //   }
-    //   {
-    //     principalId: managedIdentityModule.outputs.principalId
-    //     roleDefinitionIdOrName: 'Storage File Data Privileged Contributor'
-    //     principalType: 'ServicePrincipal'
-    //   }
-    // ]
+    roleAssignments: [
+      {
+        principalId: managedIdentityModule.outputs.principalId
+        roleDefinitionIdOrName: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
+        principalType: 'ServicePrincipal'
+      }
+      {
+        principalId: managedIdentityModule.outputs.principalId
+        roleDefinitionIdOrName: '974c5e8b-45b9-4653-ba55-5f855dd0fb88' // Storage Queue Data Contributor
+        principalType: 'ServicePrincipal'
+      }
+      {
+        principalId: managedIdentityModule.outputs.principalId
+        roleDefinitionIdOrName: 'Storage File Data Privileged Contributor'
+        principalType: 'ServicePrincipal'
+      }
+    ]
     allowSharedKeyAccess: true
     publicNetworkAccess: enablePrivateEndpointsStorage ? 'Disabled' : 'Enabled'
     networkAcls: { bypass: 'AzureServices', defaultAction: enablePrivateEndpointsStorage ? 'Deny' : 'Allow' }
@@ -2120,36 +2121,34 @@ module keyvault './modules/security/key-vault.bicep' = {
     solutionName: solutionSuffix
     location: location
     tags: tags
-    sku: 'standard'
     publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
     enablePurgeProtection: enablePurgeProtection
-    enableRbacAuthorization: true
-    enableSoftDelete: true
     softDeleteRetentionInDays: 7
+    diagnosticSettings: monitoringDiagnosticSettings
     enablePrivateNetworking: enablePrivateNetworking
     privateEndpointSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.backendSubnetResourceId : ''
     privateDnsZoneResourceIds: enablePrivateNetworking ? [
       privateDnsZoneDeployments[dnsZoneIndex.keyVault]!.outputs.resourceId
     ] : []
-    // roleAssignments: concat(
-    //   managedIdentityModule.outputs.principalId != ''
-    //     ? [
-    //         {
-    //           principalId: managedIdentityModule.outputs.principalId
-    //           principalType: 'ServicePrincipal'
-    //           roleDefinitionIdOrName: 'Key Vault Secrets User'
-    //         }
-    //       ]
-    //     : [],
-    //   !empty(principal.id)
-    //     ? [
-    //         {
-    //           principalId: principal.id
-    //           roleDefinitionIdOrName: 'Key Vault Secrets User'
-    //         }
-    //       ]
-    //     : []
-    // )
+    roleAssignments: concat(
+      managedIdentityModule!.outputs.principalId != ''
+        ? [
+            {
+              principalId: managedIdentityModule!.outputs.principalId
+              principalType: 'ServicePrincipal'
+              roleDefinitionIdOrName: 'Key Vault Secrets User'
+            }
+          ]
+        : [],
+      !empty(principal.id)
+        ? [
+            {
+              principalId: principal.id
+              roleDefinitionIdOrName: 'Key Vault Secrets User'
+            }
+          ]
+        : []
+    )
     secrets: [
       {
         name: 'FUNCTION-KEY'
@@ -2172,37 +2171,46 @@ module openai './modules/ai/ai-services.bicep' = {
     sku: azureOpenAISkuName
     disableLocalAuth: true
     enablePrivateNetworking: enablePrivateNetworking
+    diagnosticSettings: monitoringDiagnosticSettings
+    userAssignedResourceId: managedIdentityModule.outputs.resourceId
     enableTelemetry: enableTelemetry
+    allowedFqdnList: concat(
+      [
+        '${storageAccountName}.blob.${environment().suffixes.storage}'
+        '${storageAccountName}.queue.${environment().suffixes.storage}'
+      ],
+      databaseType == 'CosmosDB' ? ['${azureAISearchName}.search.windows.net'] : []
+    )
     privateEndpointSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.backendSubnetResourceId : ''
     privateDnsZoneResourceIds: enablePrivateNetworking ? [
       privateDnsZoneDeployments[dnsZoneIndex.openAI]!.outputs.resourceId
     ] : []
-    // roleAssignments: concat(
-    //   [
-    //     {
-    //       roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
-    //       principalId: managedIdentityModule.outputs.principalId
-    //       principalType: 'ServicePrincipal'
-    //     }
-    //     {
-    //       roleDefinitionIdOrName: '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd' // Cognitive Services Contributor
-    //       principalId: managedIdentityModule.outputs.principalId
-    //       principalType: 'ServicePrincipal'
-    //     }
-    //   ],
-    //   !empty(principal.id)
-    //     ? [
-    //         {
-    //           roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
-    //           principalId: principal.id
-    //         }
-    //         {
-    //           roleDefinitionIdOrName: '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd' // Cognitive Services Contributor
-    //           principalId: principal.id
-    //         }
-    //       ]
-    //     : []
-    // )
+    roleAssignments: concat(
+      [
+        {
+          roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
+          principalId: managedIdentityModule.outputs.principalId
+          principalType: 'ServicePrincipal'
+        }
+        {
+          roleDefinitionIdOrName: '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd' // Cognitive Services Contributor
+          principalId: managedIdentityModule.outputs.principalId
+          principalType: 'ServicePrincipal'
+        }
+      ],
+      !empty(principal.id)
+        ? [
+            {
+              roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
+              principalId: principal.id
+            }
+            {
+              roleDefinitionIdOrName: '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd' // Cognitive Services Contributor
+              principalId: principal.id
+            }
+          ]
+        : []
+    )
   }
 }
 
@@ -2232,29 +2240,31 @@ module computerVision './modules/ai/ai-services.bicep' = if (useAdvancedImagePro
     location: computerVisionLocation != '' ? computerVisionLocation : 'eastus' // Default to eastus if no location provided
     tags: allTags
     sku: computerVisionSkuName
+    diagnosticSettings: monitoringDiagnosticSettings
     enablePrivateNetworking: enablePrivateNetworking
     enableTelemetry: enableTelemetry
+    userAssignedResourceId: managedIdentityModule.outputs.resourceId
     privateEndpointSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.backendSubnetResourceId : ''
     privateDnsZoneResourceIds: enablePrivateNetworking ? [
       privateDnsZoneDeployments[dnsZoneIndex.cognitiveServices]!.outputs.resourceId
     ] : []
-    // roleAssignments: concat(
-    //   [
-    //     {
-    //       roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
-    //       principalId: managedIdentityModule.outputs.principalId
-    //       principalType: 'ServicePrincipal'
-    //     }
-    //   ],
-    //   !empty(principal.id)
-    //     ? [
-    //         {
-    //           roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
-    //           principalId: principal.id
-    //         }
-    //       ]
-    //     : []
-    // )
+    roleAssignments: concat(
+      [
+        {
+          roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
+          principalId: managedIdentityModule.outputs.principalId
+          principalType: 'ServicePrincipal'
+        }
+      ],
+      !empty(principal.id)
+        ? [
+            {
+              roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
+              principalId: principal.id
+            }
+          ]
+        : []
+    )
   }
 }
 
@@ -2270,30 +2280,33 @@ module speechService './modules/ai/ai-services.bicep' = {
     location: location
     kind: 'SpeechServices'
     sku: 'S0'
-    disableLocalAuth: false
+    disableLocalAuth: true
+    tags: allTags
     enablePrivateNetworking: enablePrivateNetworkingSpeech
+    diagnosticSettings: monitoringDiagnosticSettings
     enableTelemetry: enableTelemetry
+    userAssignedResourceId: managedIdentityModule.outputs.resourceId
     privateEndpointSubnetId: enablePrivateNetworkingSpeech ? virtualNetwork!.outputs.backendSubnetResourceId : ''
     privateDnsZoneResourceIds: enablePrivateNetworkingSpeech ? [
       privateDnsZoneDeployments[dnsZoneIndex.cognitiveServices]!.outputs.resourceId
     ] : []
-    // roleAssignments: concat(
-    //   [
-    //     {
-    //       roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
-    //       principalId: managedIdentityModule.outputs.principalId
-    //       principalType: 'ServicePrincipal'
-    //     }
-    //   ],
-    //   !empty(principal.id)
-    //     ? [
-    //         {
-    //           roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
-    //           principalId: principal.id
-    //         }
-    //       ]
-    //     : []
-    // )
+    roleAssignments: concat(
+      [
+        {
+          roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
+          principalId: managedIdentityModule.outputs.principalId
+          principalType: 'ServicePrincipal'
+        }
+      ],
+      !empty(principal.id)
+        ? [
+            {
+              roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
+              principalId: principal.id
+            }
+          ]
+        : []
+    )
   }
 }
 
@@ -2307,34 +2320,39 @@ module formrecognizer './modules/ai/ai-services.bicep' = {
     location: location
     kind: 'FormRecognizer'
     disableLocalAuth: true
+    allowedFqdnList: [
+      '${storageAccountName}.blob.${environment().suffixes.storage}'
+      '${storageAccountName}.queue.${environment().suffixes.storage}'
+    ]
     enablePrivateNetworking: enablePrivateNetworking
     enableTelemetry: enableTelemetry
+    diagnosticSettings: monitoringDiagnosticSettings
     privateEndpointSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.backendSubnetResourceId : ''
     privateDnsZoneResourceIds: enablePrivateNetworking ? [
       privateDnsZoneDeployments[dnsZoneIndex.cognitiveServices]!.outputs.resourceId
     ] : []
-    // roleAssignments: concat(
-    //   [
-    //     {
-    //       roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
-    //       principalId: managedIdentityModule.outputs.principalId
-    //       principalType: 'ServicePrincipal'
-    //     }
-    //     {
-    //       roleDefinitionIdOrName: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
-    //       principalId: managedIdentityModule.outputs.principalId
-    //       principalType: 'ServicePrincipal'
-    //     }
-    //   ],
-    //   !empty(principal.id)
-    //     ? [
-    //         {
-    //           roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
-    //           principalId: principal.id
-    //         }
-    //       ]
-    //     : []
-    // )
+    roleAssignments: concat(
+      [
+        {
+          roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
+          principalId: managedIdentityModule.outputs.principalId
+          principalType: 'ServicePrincipal'
+        }
+        {
+          roleDefinitionIdOrName: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
+          principalId: managedIdentityModule.outputs.principalId
+          principalType: 'ServicePrincipal'
+        }
+      ],
+      !empty(principal.id)
+        ? [
+            {
+              roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
+              principalId: principal.id
+            }
+          ]
+        : []
+    )
   }
 }
 
@@ -2348,29 +2366,31 @@ module contentsafety './modules/ai/ai-services.bicep' = {
     tags: allTags
     kind: 'ContentSafety'
     disableLocalAuth: true
+    diagnosticSettings: monitoringDiagnosticSettings
     enablePrivateNetworking: enablePrivateNetworking
+    userAssignedResourceId: managedIdentityModule.outputs.resourceId
     enableTelemetry: enableTelemetry
     privateEndpointSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.backendSubnetResourceId : ''
     privateDnsZoneResourceIds: enablePrivateNetworking ? [
       privateDnsZoneDeployments[dnsZoneIndex.cognitiveServices]!.outputs.resourceId
     ] : []
-    // roleAssignments: concat(
-    //   [
-    //     {
-    //       roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
-    //       principalId: managedIdentityModule.outputs.principalId
-    //       principalType: 'ServicePrincipal'
-    //     }
-    //   ],
-    //   !empty(principal.id)
-    //     ? [
-    //         {
-    //           roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
-    //           principalId: principal.id
-    //         }
-    //       ]
-    //     : []
-    // )
+    roleAssignments: concat(
+      [
+        {
+          roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
+          principalId: managedIdentityModule.outputs.principalId
+          principalType: 'ServicePrincipal'
+        }
+      ],
+      !empty(principal.id)
+        ? [
+            {
+              roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
+              principalId: principal.id
+            }
+          ]
+        : []
+    )
   }
 }
 
@@ -2384,11 +2404,10 @@ module search './modules/ai/ai-search.bicep' = if (databaseType == 'CosmosDB') {
     enableTelemetry: enableTelemetry
     skuName: azureSearchSku
     disableLocalAuth: false
-    partitionCount: 1
-    replicaCount: 1
     semanticSearch: azureSearchUseSemanticSearch ? 'free' : 'disabled'
     diagnosticSettings: monitoringDiagnosticSettings
     publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
+    userAssignedResourceId: managedIdentityModule.outputs.resourceId
     privateEndpoints: enablePrivateNetworking
       ? [
           {
@@ -2406,41 +2425,41 @@ module search './modules/ai/ai-search.bicep' = if (databaseType == 'CosmosDB') {
           }
         ]
       : []
-  //   roleAssignments: concat(
-  //     [
-  //       {
-  //         roleDefinitionIdOrName: '8ebe5a00-799e-43f5-93ac-243d3dce84a7' // Search Index Data Contributor
-  //         principalId: managedIdentityModule.outputs.principalId
-  //         principalType: 'ServicePrincipal'
-  //       }
-  //       {
-  //         roleDefinitionIdOrName: '7ca78c08-252a-4471-8644-bb5ff32d4ba0' // Search Service Contributor
-  //         principalId: managedIdentityModule.outputs.principalId
-  //         principalType: 'ServicePrincipal'
-  //       }
-  //       {
-  //         roleDefinitionIdOrName: '1407120a-92aa-4202-b7e9-c0e197c71c8f' // Search Index Data Reader
-  //         principalId: managedIdentityModule.outputs.principalId
-  //         principalType: 'ServicePrincipal'
-  //       }
-  //     ],
-  //     !empty(principal.id)
-  //       ? [
-  //           {
-  //             roleDefinitionIdOrName: '8ebe5a00-799e-43f5-93ac-243d3dce84a7' // Search Index Data Contributor
-  //             principalId: principal.id
-  //           }
-  //           {
-  //             roleDefinitionIdOrName: '7ca78c08-252a-4471-8644-bb5ff32d4ba0' // Search Service Contributor
-  //             principalId: principal.id
-  //           }
-  //           {
-  //             roleDefinitionIdOrName: '1407120a-92aa-4202-b7e9-c0e197c71c8f' // Search Index Data Reader
-  //             principalId: principal.id
-  //           }
-  //         ]
-  //       : []
-  //   )
+    roleAssignments: concat(
+      [
+        {
+          roleDefinitionIdOrName: '8ebe5a00-799e-43f5-93ac-243d3dce84a7' // Search Index Data Contributor
+          principalId: managedIdentityModule.outputs.principalId
+          principalType: 'ServicePrincipal'
+        }
+        {
+          roleDefinitionIdOrName: '7ca78c08-252a-4471-8644-bb5ff32d4ba0' // Search Service Contributor
+          principalId: managedIdentityModule.outputs.principalId
+          principalType: 'ServicePrincipal'
+        }
+        {
+          roleDefinitionIdOrName: '1407120a-92aa-4202-b7e9-c0e197c71c8f' // Search Index Data Reader
+          principalId: managedIdentityModule.outputs.principalId
+          principalType: 'ServicePrincipal'
+        }
+      ],
+      !empty(principal.id)
+        ? [
+            {
+              roleDefinitionIdOrName: '8ebe5a00-799e-43f5-93ac-243d3dce84a7' // Search Index Data Contributor
+              principalId: principal.id
+            }
+            {
+              roleDefinitionIdOrName: '7ca78c08-252a-4471-8644-bb5ff32d4ba0' // Search Service Contributor
+              principalId: principal.id
+            }
+            {
+              roleDefinitionIdOrName: '1407120a-92aa-4202-b7e9-c0e197c71c8f' // Search Index Data Reader
+              principalId: principal.id
+            }
+          ]
+        : []
+    )
   }
 }
 
@@ -2455,20 +2474,18 @@ module webServerFarm './modules/compute/app-service-plan.bicep' = {
     location: location
     tags: tags
     enableTelemetry: enableTelemetry
-    skuName: (enableScalability || enableRedundancy) ? 'P1v4' : hostingPlanSku
-    skuCapacity: enableScalability ? 3 : 1
+    skuName: (enableScalability || enableRedundancy) ? 'P1v3' : hostingPlanSku
+    skuCapacity: enableScalability ? 3 : 2
     zoneRedundant: enableRedundancy
     diagnosticSettings: monitoringDiagnosticSettings
   }
 }
 
-var postgresDBFqdn = '${postgresResourceName}.postgres.database.azure.com'
 var webLinuxFxVersion = hostingModel == 'container'
   ? 'DOCKER|${registryName}.azurecr.io/rag-webapp:${appversion}'
   : 'PYTHON|3.11'
-var adminWebLinuxFxVersion = hostingModel == 'container'
-  ? 'DOCKER|${registryName}.azurecr.io/rag-adminwebapp:${appversion}'
-  : 'PYTHON|3.11'
+// endToEndEncryptionEnabled is only supported on Premium v2/v3 or Isolated v2 App Service Plans.
+var appServicePlanIsPremium = enableScalability || enableRedundancy
 module web './modules/compute/app-service.bicep' = {
   name: take('module.web.site.${websiteName}${hostingModel == 'container' ? '-docker' : ''}', 64)
   scope: resourceGroup()
@@ -2479,10 +2496,12 @@ module web './modules/compute/app-service.bicep' = {
     kind: hostingModel == 'container' ? 'app,linux,container' : 'app,linux'
     enableTelemetry: enableTelemetry
     serverFarmResourceId: webServerFarm.outputs.resourceId
+    userAssignedResourceId: managedIdentityModule.outputs.resourceId
     linuxFxVersion: webLinuxFxVersion
     diagnosticSettings: monitoringDiagnosticSettings
     virtualNetworkSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.webserverfarmSubnetResourceId : ''
-    publicNetworkAccess: 'Enabled'
+    vnetRouteAllEnabled: enablePrivateNetworking ? true : false
+    e2eEncryptionEnabled: appServicePlanIsPremium
     appSettings: union(
       {
         AZURE_BLOB_ACCOUNT_NAME: storageAccountName
@@ -2519,9 +2538,9 @@ module web './modules/compute/app-service.bicep' = {
         PACKAGE_LOGGING_LEVEL: 'WARNING'
         AZURE_LOGGING_PACKAGES: ''
         DATABASE_TYPE: databaseType
-        // MANAGED_IDENTITY_CLIENT_ID: managedIdentityModule.outputs.clientId
-        // MANAGED_IDENTITY_RESOURCE_ID: managedIdentityModule.outputs.resourceId
-        // AZURE_CLIENT_ID: managedIdentityModule.outputs.clientId // Required so LangChain AzureSearch vector store authenticates with this user-assigned managed identity
+        MANAGED_IDENTITY_CLIENT_ID: managedIdentityModule.outputs.clientId
+        MANAGED_IDENTITY_RESOURCE_ID: managedIdentityModule.outputs.resourceId
+        AZURE_CLIENT_ID: managedIdentityModule.outputs.clientId // Required so LangChain AzureSearch vector store authenticates with this user-assigned managed identity
         APP_ENV: appEnvironment
         AZURE_SEARCH_DIMENSIONS: azureSearchDimensions
         APPLICATIONINSIGHTS_ENABLED: enableMonitoring ? 'true' : 'false'
@@ -2558,15 +2577,18 @@ module web './modules/compute/app-service.bicep' = {
           }
         : databaseType == 'PostgreSQL'
             ? {
-                AZURE_POSTGRESQL_HOST_NAME: postgresDBFqdn
+                AZURE_POSTGRESQL_HOST_NAME: postgresDBModule!.outputs.serverFqdn
                 AZURE_POSTGRESQL_DATABASE_NAME: postgresDBName
-                AZURE_POSTGRESQL_USER: managedIdentityModule.outputs.name
+                AZURE_POSTGRESQL_USER: managedIdentityModule!.outputs.name
               }
             : {}
     )
   }
 }
 
+var adminWebLinuxFxVersion = hostingModel == 'container'
+  ? 'DOCKER|${registryName}.azurecr.io/rag-adminwebapp:${appversion}'
+  : 'PYTHON|3.11'
 module adminweb './modules/compute/app-service.bicep' = {
   name: take('module.web.site.${adminWebsiteName}${hostingModel == 'container' ? '-docker' : ''}', 64)
   scope: resourceGroup()
@@ -2577,9 +2599,11 @@ module adminweb './modules/compute/app-service.bicep' = {
     tags: union(tags, { 'azd-service-name': hostingModel == 'container' ? 'adminweb-docker' : 'adminweb' })
     kind: hostingModel == 'container' ? 'app,linux,container' : 'app,linux'
     serverFarmResourceId: webServerFarm.outputs.resourceId
+    userAssignedResourceId: managedIdentityModule.outputs.resourceId
     linuxFxVersion: adminWebLinuxFxVersion
     diagnosticSettings: monitoringDiagnosticSettings
-    // App settings
+    vnetRouteAllEnabled: enablePrivateNetworking ? true : false
+    e2eEncryptionEnabled: appServicePlanIsPremium
     appSettings: union(
       {
         AZURE_BLOB_ACCOUNT_NAME: storageAccountName
@@ -2651,9 +2675,9 @@ module adminweb './modules/compute/app-service.bicep' = {
           }
         : databaseType == 'PostgreSQL'
             ? {
-                AZURE_POSTGRESQL_HOST_NAME: postgresDBFqdn
+                AZURE_POSTGRESQL_HOST_NAME: postgresDBModule!.outputs.serverFqdn
                 AZURE_POSTGRESQL_DATABASE_NAME: postgresDBName
-                AZURE_POSTGRESQL_USER: managedIdentityModule.outputs.name
+                AZURE_POSTGRESQL_USER: managedIdentityModule!.outputs.name
               }
             : {}
     )
@@ -2670,16 +2694,13 @@ module function './modules/compute/function-app.bicep' = {
     kind: hostingModel == 'container' ? 'functionapp,linux,container' : 'functionapp,linux'
     serverFarmResourceId: webServerFarm.outputs.resourceId
     storageAccountName: storage.outputs.name
-    managedIdentities: {
-      systemAssigned: true
-      userAssignedResourceIds: [managedIdentityModule.outputs.resourceId]
-    }
-    siteConfig: {
-      alwaysOn: true
-    }
+    applicationInsightsName: enableMonitoring ? app_insights!.outputs.name : ''
+    userAssignedIdentityClientId: managedIdentityModule.outputs.clientId
+    managedIdentities: { systemAssigned: true, userAssignedResourceIds: !empty(managedIdentityModule.outputs.resourceId) ? [managedIdentityModule.outputs.resourceId] : [] }
     runtimeStack: 'python'
     runtimeVersion: '3.11'
     dockerFullImageName: hostingModel == 'container' ? '${registryName}.azurecr.io/rag-backend:${appversion}' : ''
+    virtualNetworkSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.backendSubnetResourceId : ''
     appSettings: union(
       {
         AZURE_BLOB_ACCOUNT_NAME: storageAccountName
@@ -2707,9 +2728,9 @@ module function './modules/compute/function-app.bicep' = {
         AZURE_LOGGING_PACKAGES: ''
         AZURE_OPENAI_SYSTEM_MESSAGE: azureOpenAISystemMessage
         DATABASE_TYPE: databaseType
-        // MANAGED_IDENTITY_CLIENT_ID: managedIdentityModule.outputs.clientId
-        // MANAGED_IDENTITY_RESOURCE_ID: managedIdentityModule.outputs.resourceId
-        // AZURE_CLIENT_ID: managedIdentityModule.outputs.clientId // Required so LangChain AzureSearch vector store authenticates with this user-assigned managed identity
+        MANAGED_IDENTITY_CLIENT_ID: managedIdentityModule.outputs.clientId
+        MANAGED_IDENTITY_RESOURCE_ID: managedIdentityModule.outputs.resourceId
+        AZURE_CLIENT_ID: managedIdentityModule.outputs.clientId // Required so LangChain AzureSearch vector store authenticates with this user-assigned managed identity
         APP_ENV: appEnvironment
         BACKEND_URL: backendUrl
         AZURE_SEARCH_DIMENSIONS: azureSearchDimensions
@@ -2737,7 +2758,7 @@ module function './modules/compute/function-app.bicep' = {
           }
         : databaseType == 'PostgreSQL'
             ? {
-                AZURE_POSTGRESQL_HOST_NAME: postgresDBFqdn
+                AZURE_POSTGRESQL_HOST_NAME: postgresDBModule!.outputs.serverFqdn
                 AZURE_POSTGRESQL_DATABASE_NAME: postgresDBName
                 AZURE_POSTGRESQL_USER: managedIdentityModule!.outputs.name
               }
@@ -2841,7 +2862,7 @@ module avmEventGridSystemTopic './modules/data/event-grid.bicep'= {
       }
     ]
     // Use only user-assigned identity
-    managedIdentities: { systemAssigned: false }
+    managedIdentities: { systemAssigned: true }
     enableTelemetry: enableTelemetry
   }
 }

@@ -32,9 +32,6 @@ var solutionSuffix = toLower(trim(replace(
   ''
 )))
 
-@description('Optional. Name of App Service plan.')
-var hostingPlanName string = 'asp-${solutionSuffix}'
-
 @description('Optional. The pricing tier for the App Service plan.')
 @allowed([
   'B2'
@@ -62,12 +59,6 @@ var websiteName string = 'app-${solutionSuffix}'
 
 @description('Name of Admin Web App.')
 var adminWebsiteName string = '${websiteName}-admin'
-
-@description('Name of Application Insights.')
-var applicationInsightsName string = 'appi-${solutionSuffix}'
-
-@description('Name of the Workbook.')
-var workbookDisplayName string = 'workbook-${solutionSuffix}'
 
 @description('Optional. Use semantic search.')
 param azureSearchUseSemanticSearch bool = false
@@ -256,20 +247,8 @@ var azureSearchDatasource string = 'datasource-${solutionSuffix}'
 @description('Optional. Azure AI Search Conversation Log Index.')
 param azureSearchConversationLogIndex string = 'conversations'
 
-@description('Name of Storage Account.')
-var storageAccountName string = 'st${solutionSuffix}'
-
 @description('Name of Function App for Batch document processing.')
 var functionName string = 'func-${solutionSuffix}'
-
-@description('Azure Form Recognizer Name.')
-var formRecognizerName string = 'di-${solutionSuffix}'
-
-@description('Azure Content Safety Name.')
-var contentSafetyName string = 'cs-${solutionSuffix}'
-
-@description('Azure Speech Service Name.')
-var speechServiceName string = 'spch-${solutionSuffix}'
 
 @description('Optional. A new GUID string generated for this deployment. This can be used for unique naming if needed.')
 param newGuidString string = newGuid()
@@ -312,7 +291,6 @@ param enableMonitoring bool = false
 var blobContainerName = 'documents'
 var queueName = 'doc-processing'
 var clientKey = '${uniqueString(guid(subscription().id, deployment().name))}${newGuidString}'
-var eventGridSystemTopicName = 'evgt-${solutionSuffix}'
 
 @description('Optional. Image version tag to use.')
 param appversion string = 'latest_waf' // Update GIT deployment branch
@@ -407,7 +385,7 @@ module app_insights './modules/monitoring/app-insights.bicep' = if (enableMonito
 module applicationInsightsDashboard './modules/monitoring/portal-dashboard.bicep' = if (enableMonitoring) {
   name: take('module.portal-dashboard.${solutionName}', 64)
   params: {
-    solutionName: applicationInsightsName
+    solutionName: solutionSuffix
     location: location
     tags: tags
     lenses: [
@@ -1702,31 +1680,10 @@ module keyvault './modules/security/key-vault.bicep' = {
     enableRbacAuthorization: true
     enableSoftDelete: true
     softDeleteRetentionInDays: 7
-    roleAssignments: concat(
-      managedIdentityModule.outputs.principalId != ''
-        ? [
-            {
-              principalId: managedIdentityModule.outputs.principalId
-              principalType: 'ServicePrincipal'
-              roleDefinitionIdOrName: 'Key Vault Secrets User'
-            }
-          ]
-        : [],
-      !empty(principal.id)
-        ? [
-            {
-              principalId: principal.id
-              roleDefinitionIdOrName: 'Key Vault Secrets User'
-            }
-          ]
-        : []
-    )
-    secrets: [
-      {
-        name: 'FUNCTION-KEY'
-        value: clientKey
-      }
-    ]
+    principalId: principal.id
+    managedIdentityObjectId: databaseType == 'PostgreSQL'
+      ? managedIdentityModule.outputs.principalId
+      : ''
   }
 }
 
@@ -1742,6 +1699,7 @@ var defaultOpenAiDeployments = [
       name: 'GlobalStandard'
       capacity: azureOpenAIModelCapacity
     }
+    raiPolicyName: 'Microsoft.Default'
   }
   {
     name: azureOpenAIEmbeddingModel
@@ -1754,314 +1712,179 @@ var defaultOpenAiDeployments = [
       name: 'GlobalStandard'
       capacity: azureOpenAIEmbeddingModelCapacity
     }
+    raiPolicyName: 'Microsoft.Default'
   }
 ]
 
-module openai 'modules/core/ai/cognitiveservices.bicep' = {
-  name: azureOpenAIResourceName
+module openai './modules/ai/ai-services.bicep' = {
+  name: take('module.app-service-backend.${solutionName}', 64)
   scope: resourceGroup()
   params: {
-    name: azureOpenAIResourceName
+    solutionName: azureOpenAIResourceName
+    namePrefix: 'oai'
     location: location
     tags: allTags
     kind: 'OpenAI'
     sku: azureOpenAISkuName
-    deployments: defaultOpenAiDeployments
-    userAssignedResourceId: managedIdentityModule.outputs.resourceId
-    // SFI: Azure_AIServices_AuthN_Disable_Local_Auth - force Entra ID authentication.
-    disableLocalAuth: true
-    restrictOutboundNetworkAccess: true
-    allowedFqdnList: concat(
-      [
-        '${storageAccountName}.blob.${environment().suffixes.storage}'
-        '${storageAccountName}.queue.${environment().suffixes.storage}'
-      ],
-      databaseType == 'CosmosDB' ? ['${azureAISearchName}.search.windows.net'] : []
-    )
-    enablePrivateNetworking: enablePrivateNetworking
-    enableMonitoring: enableMonitoring
-    enableTelemetry: enableTelemetry
-    subnetResourceId: enablePrivateNetworking ? virtualNetwork!.outputs.pepsSubnetResourceId : null
-
-    logAnalyticsWorkspaceId: enableMonitoring ? monitoring!.outputs.logAnalyticsWorkspaceId : null
-
-    // align with AVM conventions
-    privateDnsZoneResourceId: enablePrivateNetworking ? avmPrivateDnsZones[dnsZoneIndex.openAI]!.outputs.resourceId : ''
-    roleAssignments: concat(
-      [
-        {
-          roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
-          principalId: managedIdentityModule.outputs.principalId
-          principalType: 'ServicePrincipal'
-        }
-        {
-          roleDefinitionIdOrName: '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd' // Cognitive Services Contributor
-          principalId: managedIdentityModule.outputs.principalId
-          principalType: 'ServicePrincipal'
-        }
-      ],
-      !empty(principal.id)
-        ? [
-            {
-              roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
-              principalId: principal.id
-            }
-            {
-              roleDefinitionIdOrName: '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd' // Cognitive Services Contributor
-              principalId: principal.id
-            }
-          ]
-        : []
-    )
   }
-  dependsOn: enablePrivateNetworking ? avmPrivateDnsZones : []
 }
 
-module computerVision 'modules/core/ai/cognitiveservices.bicep' = if (useAdvancedImageProcessing) {
-  name: 'computerVision'
+// Model deployments (single loop for both existing and new paths)
+@batchSize(1)
+module model_deployments './modules/ai/ai-foundry-model-deployment.bicep' = [for (deployment, i) in defaultOpenAiDeployments: {
+  name: take('module.model-deployment-${i}.${solutionName}', 64)
   scope: resourceGroup()
   params: {
-    name: computerVisionName
+    aiServicesAccountName: openai.outputs.name
+    deploymentName: deployment.name
+    modelName: deployment.model.name
+    modelVersion: deployment.model.version
+    raiPolicyName: deployment.raiPolicyName
+    skuName: deployment.sku.name
+    skuCapacity: deployment.sku.capacity
+  }
+}]
+
+module computerVision './modules/ai/ai-services.bicep' = if (useAdvancedImageProcessing) {
+  name: take('module.app-service-computerVision.${solutionName}', 64)
+  scope: resourceGroup()
+  params: {
+    solutionName: solutionSuffix
+    namePrefix: 'cv'
     kind: 'ComputerVision'
     location: computerVisionLocation != '' ? computerVisionLocation : 'eastus' // Default to eastus if no location provided
     tags: allTags
     sku: computerVisionSkuName
-    // SFI: Azure_ComputerVision_AuthN_Disable_Local_Auth - force Entra ID authentication.
     disableLocalAuth: true
-    // SFI: Azure_ComputerVision_DP_Data_Loss_Prevention - inherited via cognitiveservices module default (restrictOutboundNetworkAccess: true).
-
-    enablePrivateNetworking: enablePrivateNetworking
-    enableMonitoring: enableMonitoring
-    enableTelemetry: enableTelemetry
-    subnetResourceId: enablePrivateNetworking ? virtualNetwork!.outputs.pepsSubnetResourceId : null
-
-    logAnalyticsWorkspaceId: enableMonitoring ? monitoring!.outputs.logAnalyticsWorkspaceId : null
-    userAssignedResourceId: managedIdentityModule.outputs.resourceId
-    privateDnsZoneResourceId: enablePrivateNetworking
-      ? avmPrivateDnsZones[dnsZoneIndex.cognitiveServices]!.outputs.resourceId
-      : ''
-    roleAssignments: concat(
-      [
-        {
-          roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
-          principalId: managedIdentityModule.outputs.principalId
-          principalType: 'ServicePrincipal'
-        }
-      ],
-      !empty(principal.id)
-        ? [
-            {
-              roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
-              principalId: principal.id
-            }
-          ]
-        : []
-    )
   }
-  dependsOn: enablePrivateNetworking ? avmPrivateDnsZones : []
 }
 
-// The Web socket from front end application connects to Speech service over a public internet and it does not work over a Private endpoint.
-// So public access is enabled even if AVM WAF is enabled.
-var enablePrivateNetworkingSpeech = false
-module speechService 'modules/core/ai/cognitiveservices.bicep' = {
-  name: speechServiceName
+module speechService './modules/ai/ai-services.bicep' = {
+  name: take('module.app-service-speech.${solutionName}', 64)
   scope: resourceGroup()
   params: {
-    name: speechServiceName
+    solutionName: solutionSuffix
+    namePrefix: 'spch'
     location: location
     kind: 'SpeechServices'
     sku: 'S0'
-
-    enablePrivateNetworking: enablePrivateNetworkingSpeech
-    enableMonitoring: enableMonitoring
-    enableTelemetry: enableTelemetry
-    subnetResourceId: enablePrivateNetworkingSpeech ? virtualNetwork!.outputs.pepsSubnetResourceId : null
-
-    logAnalyticsWorkspaceId: enableMonitoring ? monitoring!.outputs.logAnalyticsWorkspaceId : null
-    // SFI exception: Speech SDK uses key-based websocket authentication from the browser, so local auth must remain enabled.
-    // Tracked control: Azure_AIServices_AuthN_Disable_Local_Auth.
-    disableLocalAuth: false
-    userAssignedResourceId: managedIdentityModule.outputs.resourceId
-    privateDnsZoneResourceId: enablePrivateNetworkingSpeech
-      ? avmPrivateDnsZones[dnsZoneIndex.cognitiveServices]!.outputs.resourceId
-      : ''
-    roleAssignments: concat(
-      [
-        {
-          roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
-          principalId: managedIdentityModule.outputs.principalId
-          principalType: 'ServicePrincipal'
-        }
-      ],
-      !empty(principal.id)
-        ? [
-            {
-              roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
-              principalId: principal.id
-            }
-          ]
-        : []
-    )
-  }
-  dependsOn: enablePrivateNetworking ? avmPrivateDnsZones : []
-}
-
-resource search 'Microsoft.Search/searchServices@2024-06-01-preview' = if (databaseType == 'CosmosDB') {
-  name: azureAISearchName
-  location: location
-  sku: {
-    name: azureSearchSku
   }
 }
 
-// Separate module for Search Service to enable managed identity and update other properties, as this reduces deployment time for the search service
-module searchUpdate 'br/public:avm/res/search/search-service:0.11.1' = if (databaseType == 'CosmosDB') {
-  name: take('avm.res.search.update.${azureAISearchName}', 64)
-  params: {
-    // Required parameters
-    name: azureAISearchName
-    location: location
-    tags: allTags
-    enableTelemetry: enableTelemetry
-    sku: azureSearchSku
-    authOptions: {
-      aadOrApiKey: {
-        aadAuthFailureMode: 'http401WithBearerChallenge'
-      }
-    }
-    disableLocalAuth: false
-    hostingMode: 'default'
-    networkRuleSet: {
-      bypass: 'AzureServices'
-      ipRules: []
-    }
-    partitionCount: 1
-    replicaCount: 1
-    semanticSearch: azureSearchUseSemanticSearch ? 'free' : 'disabled'
-
-    // WAF aligned configuration for Monitoring
-    diagnosticSettings: enableMonitoring ? [{ workspaceResourceId: monitoring!.outputs.logAnalyticsWorkspaceId }] : []
-
-    // WAF aligned configuration for Private Networking
-    publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
-
-    privateEndpoints: enablePrivateNetworking
-      ? [
-          {
-            name: 'pep-search-${solutionSuffix}'
-            privateDnsZoneGroup: {
-              privateDnsZoneGroupConfigs: [
-                {
-                  name: 'search-dns-zone-group-blob'
-                  privateDnsZoneResourceId: avmPrivateDnsZones[dnsZoneIndex.searchService]!.outputs.resourceId
-                }
-              ]
-            }
-            subnetResourceId: virtualNetwork!.outputs.pepsSubnetResourceId
-            service: 'searchService'
-          }
-        ]
-      : []
-
-    // Configure managed identity: user-assigned for production, system-assigned allowed for local development with integrated vectorization
-    managedIdentities: { systemAssigned: true, userAssignedResourceIds: [managedIdentityModule.outputs.resourceId] }
-    roleAssignments: concat(
-      [
-        {
-          roleDefinitionIdOrName: '8ebe5a00-799e-43f5-93ac-243d3dce84a7' // Search Index Data Contributor
-          principalId: managedIdentityModule.outputs.principalId
-          principalType: 'ServicePrincipal'
-        }
-        {
-          roleDefinitionIdOrName: '7ca78c08-252a-4471-8644-bb5ff32d4ba0' // Search Service Contributor
-          principalId: managedIdentityModule.outputs.principalId
-          principalType: 'ServicePrincipal'
-        }
-        {
-          roleDefinitionIdOrName: '1407120a-92aa-4202-b7e9-c0e197c71c8f' // Search Index Data Reader
-          principalId: managedIdentityModule.outputs.principalId
-          principalType: 'ServicePrincipal'
-        }
-      ],
-      !empty(principal.id)
-        ? [
-            {
-              roleDefinitionIdOrName: '8ebe5a00-799e-43f5-93ac-243d3dce84a7' // Search Index Data Contributor
-              principalId: principal.id
-            }
-            {
-              roleDefinitionIdOrName: '7ca78c08-252a-4471-8644-bb5ff32d4ba0' // Search Service Contributor
-              principalId: principal.id
-            }
-            {
-              roleDefinitionIdOrName: '1407120a-92aa-4202-b7e9-c0e197c71c8f' // Search Index Data Reader
-              principalId: principal.id
-            }
-          ]
-        : []
-    )
-  }
-  dependsOn: [
-    search
-  ]
-}
-
-// AVM WAF - Server Farm + Web Site conversions
-var webServerFarmResourceName = hostingPlanName
-
-module webServerFarm 'br/public:avm/res/web/serverfarm:0.5.0' = {
-  name: take('avm.res.web.serverfarm.${webServerFarmResourceName}', 64)
+// Update your formrecognizer module
+module formrecognizer './modules/ai/ai-services.bicep' = {
+  name: take('module.app-service-formrecognizer.${solutionName}', 64)
   scope: resourceGroup()
   params: {
-    name: webServerFarmResourceName
-    tags: allTags
-    enableTelemetry: enableTelemetry
+    solutionName: solutionSuffix
+    namePrefix: 'di'
     location: location
-    reserved: true
-    kind: 'linux'
-    // WAF aligned configuration for Monitoring
-    diagnosticSettings: enableMonitoring ? [{ workspaceResourceId: monitoring!.outputs.logAnalyticsWorkspaceId }] : null
-    // WAF aligned configuration for Scalability
-    skuName: enableScalability || enableRedundancy ? 'P1v3' : hostingPlanSku
-    skuCapacity: enableScalability ? 3 : 2
-    // WAF aligned configuration for Redundancy
-    zoneRedundant: enableRedundancy ? true : false
+    tags: allTags
+    kind: 'FormRecognizer'
   }
 }
 
+module contentsafety './modules/ai/ai-services.bicep' = {
+  name: take('module.app-service-contentsafety.${solutionName}', 64)
+  scope: resourceGroup()
+  params: {
+    solutionName: solutionSuffix
+    namePrefix: 'cs'
+    location: location
+    tags: allTags
+    kind: 'ContentSafety'
+  }
+}
+
+module search './modules/ai/ai-search.bicep' = if (databaseType == 'CosmosDB') {
+  name: take('module.ai-search.${solutionName}', 64)
+  params: {
+    solutionName: solutionSuffix
+    location: location
+    skuName: azureSearchSku
+    semanticSearch: azureSearchUseSemanticSearch ? 'free' : 'disabled'
+    disableLocalAuth: false
+  }
+  scope: resourceGroup(resourceGroup().name)
+}
+
+module webServerFarm './modules/compute/app-service-plan.bicep' = {
+  name: take('module.app-service-plan.${solutionName}', 64)
+  params: {
+    solutionName: solutionSuffix
+    location: location
+    skuName: hostingPlanSku
+  }
+}
+
+module storage './modules/data/storage-account.bicep' = {
+  name: take('module.data.storage-account.${solutionName}', 64)
+  params: {
+    solutionName: solutionSuffix
+    location: location
+    tags: tags
+    accessTier: 'Hot'
+    skuName: 'Standard_GRS'
+    kind: 'StorageV2'
+    containers: [
+      {
+        name: blobContainerName
+        publicAccess: 'None'
+      }
+      {
+        name: 'config'
+        publicAccess: 'None'
+      }
+    ]
+    queues: [
+      {
+        name: 'doc-processing'
+      }
+      {
+        name: 'doc-processing-poison'
+      }
+    ]
+    // roleAssignments: [
+    //   {
+    //     principalId: managedIdentityModule.outputs.principalId
+    //     roleDefinitionIdOrName: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
+    //     principalType: 'ServicePrincipal'
+    //   }
+    //   {
+    //     principalId: managedIdentityModule.outputs.principalId
+    //     roleDefinitionIdOrName: '974c5e8b-45b9-4653-ba55-5f855dd0fb88' // Storage Queue Data Contributor
+    //     principalType: 'ServicePrincipal'
+    //   }
+    //   {
+    //     principalId: managedIdentityModule.outputs.principalId
+    //     roleDefinitionIdOrName: 'Storage File Data Privileged Contributor'
+    //     principalType: 'ServicePrincipal'
+    //   }
+    // ]
+  }
+}
+
+var webLinuxFxVersion = hostingModel == 'container'
+  ? 'DOCKER|${registryName}.azurecr.io/rag-webapp:${appversion}'
+  : 'PYTHON|3.11'
+var adminWebLinuxFxVersion = hostingModel == 'container'
+  ? 'DOCKER|${registryName}.azurecr.io/rag-adminwebapp:${appversion}'
+  : 'PYTHON|3.11'
+
 var postgresDBFqdn = '${postgresResourceName}.postgres.database.azure.com'
-// endToEndEncryptionEnabled is only supported on Premium v2/v3 or Isolated v2 App Service Plans.
-var appServicePlanIsPremium = enableScalability || enableRedundancy
-module web 'modules/app/web.bicep' = {
+module web './modules/compute/app-service.bicep' = {
   name: take('module.web.site.${websiteName}${hostingModel == 'container' ? '-docker' : ''}', 64)
   scope: resourceGroup()
   params: {
-    // keep existing params but make them conditional so this single module covers both code and container hosting
-    name: hostingModel == 'container' ? '${websiteName}-docker' : websiteName
+    solutionName: hostingModel == 'container' ? '${websiteName}-docker' : websiteName
     location: location
     tags: union(tags, { 'azd-service-name': hostingModel == 'container' ? 'web-docker' : 'web' })
     kind: hostingModel == 'container' ? 'app,linux,container' : 'app,linux'
     serverFarmResourceId: webServerFarm.outputs.resourceId
-    // runtime settings apply only for code-hosted apps
-    runtimeName: hostingModel == 'code' ? 'python' : null
-    runtimeVersion: hostingModel == 'code' ? '3.11' : null
-    // docker-specific fields apply only for container-hosted apps
-    dockerFullImageName: hostingModel == 'container' ? '${registryName}.azurecr.io/rag-webapp:${appversion}' : null
-    useDocker: hostingModel == 'container' ? true : false
-    allowedOrigins: []
-    appCommandLine: ''
-    userAssignedIdentityResourceId: managedIdentityModule.outputs.resourceId
-    diagnosticSettings: enableMonitoring ? [{ workspaceResourceId: monitoring!.outputs.logAnalyticsWorkspaceId }] : []
-    vnetRouteAllEnabled: enablePrivateNetworking ? true : false
-    vnetImagePullEnabled: enablePrivateNetworking ? true : false
-    virtualNetworkSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.webSubnetResourceId : ''
-    publicNetworkAccess: 'Enabled' // Always enabling public network access
-    e2eEncryptionEnabled: appServicePlanIsPremium
-    applicationInsightsName: enableMonitoring ? monitoring!.outputs.applicationInsightsName : ''
+    linuxFxVersion: webLinuxFxVersion
     appSettings: union(
       {
-        AZURE_BLOB_ACCOUNT_NAME: storageAccountName
+        AZURE_BLOB_ACCOUNT_NAME: storage.outputs.name
         AZURE_BLOB_CONTAINER_NAME: blobContainerName
         AZURE_FORM_RECOGNIZER_ENDPOINT: formrecognizer.outputs.endpoint
         AZURE_COMPUTER_VISION_ENDPOINT: useAdvancedImageProcessing ? computerVision!.outputs.endpoint : ''
@@ -2083,7 +1906,7 @@ module web 'modules/app/web.bicep' = {
         AZURE_OPENAI_EMBEDDING_MODEL: azureOpenAIEmbeddingModel
         AZURE_OPENAI_EMBEDDING_MODEL_NAME: azureOpenAIEmbeddingModelName
         AZURE_OPENAI_EMBEDDING_MODEL_VERSION: azureOpenAIEmbeddingModelVersion
-        AZURE_SPEECH_SERVICE_NAME: speechServiceName
+        AZURE_SPEECH_SERVICE_NAME: speechService.outputs.name
         AZURE_SPEECH_SERVICE_REGION: location
         AZURE_SPEECH_RECOGNIZER_LANGUAGES: recognizedLanguages
         AZURE_SPEECH_REGION_ENDPOINT: speechService.outputs.endpoint
@@ -2105,8 +1928,8 @@ module web 'modules/app/web.bicep' = {
       databaseType == 'CosmosDB'
         ? {
             AZURE_COSMOSDB_ACCOUNT_NAME: azureCosmosDBAccountName
-            AZURE_COSMOSDB_DATABASE_NAME: cosmosDbName
-            AZURE_COSMOSDB_CONVERSATIONS_CONTAINER_NAME: cosmosDbContainerName
+            AZURE_COSMOSDB_DATABASE_NAME: cosmosDBModule!.outputs.databaseName
+            AZURE_COSMOSDB_CONVERSATIONS_CONTAINER_NAME: cosmosDBModule!.outputs.containerName
             AZURE_COSMOSDB_ENABLE_FEEDBACK: 'true'
             AZURE_SEARCH_USE_SEMANTIC_SEARCH: azureSearchUseSemanticSearch ? 'true' : 'false'
             AZURE_SEARCH_SERVICE: 'https://${azureAISearchName}.search.windows.net'
@@ -2142,28 +1965,19 @@ module web 'modules/app/web.bicep' = {
   }
 }
 
-module adminweb 'modules/app/adminweb.bicep' = {
+module adminweb './modules/compute/app-service.bicep' = {
   name: take('module.web.site.${adminWebsiteName}${hostingModel == 'container' ? '-docker' : ''}', 64)
   scope: resourceGroup()
   params: {
-    name: hostingModel == 'container' ? '${adminWebsiteName}-docker' : adminWebsiteName
+    solutionName: hostingModel == 'container' ? '${adminWebsiteName}-docker' : adminWebsiteName
     location: location
     tags: union(tags, { 'azd-service-name': hostingModel == 'container' ? 'adminweb-docker' : 'adminweb' })
-    allTags: allTags
     kind: hostingModel == 'container' ? 'app,linux,container' : 'app,linux'
     serverFarmResourceId: webServerFarm.outputs.resourceId
-    // runtime settings apply only for code-hosted apps
-    runtimeName: hostingModel == 'code' ? 'python' : null
-    runtimeVersion: hostingModel == 'code' ? '3.11' : null
-    // docker-specific fields apply only for container-hosted apps
-    dockerFullImageName: hostingModel == 'container' ? '${registryName}.azurecr.io/rag-adminwebapp:${appversion}' : null
-    useDocker: hostingModel == 'container' ? true : false
-    userAssignedIdentityResourceId: managedIdentityModule.outputs.resourceId
-    e2eEncryptionEnabled: appServicePlanIsPremium
-    // App settings
+    linuxFxVersion: adminWebLinuxFxVersion
     appSettings: union(
       {
-        AZURE_BLOB_ACCOUNT_NAME: storageAccountName
+        AZURE_BLOB_ACCOUNT_NAME: storage.outputs.name
         AZURE_BLOB_CONTAINER_NAME: blobContainerName
         AZURE_FORM_RECOGNIZER_ENDPOINT: formrecognizer.outputs.endpoint
         AZURE_COMPUTER_VISION_ENDPOINT: useAdvancedImageProcessing ? computerVision!.outputs.endpoint : ''
@@ -2237,41 +2051,24 @@ module adminweb 'modules/app/adminweb.bicep' = {
               }
             : {}
     )
-    applicationInsightsName: enableMonitoring ? monitoring!.outputs.applicationInsightsName : ''
-    // WAF parameters
-    diagnosticSettings: enableMonitoring ? [{ workspaceResourceId: monitoring!.outputs.logAnalyticsWorkspaceId }] : []
-    vnetImagePullEnabled: enablePrivateNetworking ? true : false
-    vnetRouteAllEnabled: enablePrivateNetworking ? true : false
-    virtualNetworkSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.webSubnetResourceId : ''
-    publicNetworkAccess: 'Enabled' // Always enabling public network access
   }
 }
 
-module function 'modules/app/function.bicep' = {
+module function './modules/compute/function-app.bicep' = {
   name: hostingModel == 'container' ? '${functionName}-docker' : functionName
   scope: resourceGroup()
   params: {
     name: hostingModel == 'container' ? '${functionName}-docker' : functionName
     location: location
     tags: union(tags, { 'azd-service-name': hostingModel == 'container' ? 'function-docker' : 'function' })
-    runtimeName: 'python'
+    runtimeStack: 'python'
     runtimeVersion: '3.11'
     dockerFullImageName: hostingModel == 'container' ? '${registryName}.azurecr.io/rag-backend:${appversion}' : ''
     serverFarmResourceId: webServerFarm.outputs.resourceId
-    applicationInsightsName: enableMonitoring ? monitoring!.outputs.applicationInsightsName : ''
     storageAccountName: storage.outputs.name
-    userAssignedIdentityResourceId: managedIdentityModule.outputs.resourceId
-    userAssignedIdentityClientId: managedIdentityModule.outputs.clientId
-    // WAF aligned configurations
-    diagnosticSettings: enableMonitoring ? [{ workspaceResourceId: monitoring!.outputs.logAnalyticsWorkspaceId }] : []
-    virtualNetworkSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.webSubnetResourceId : ''
-    vnetRouteAllEnabled: enablePrivateNetworking ? true : false
-    vnetImagePullEnabled: enablePrivateNetworking ? true : false
-    publicNetworkAccess: 'Enabled' // Always enabling public network access
-    e2eEncryptionEnabled: appServicePlanIsPremium
     appSettings: union(
       {
-        AZURE_BLOB_ACCOUNT_NAME: storageAccountName
+        AZURE_BLOB_ACCOUNT_NAME: storage.outputs.name
         AZURE_BLOB_CONTAINER_NAME: blobContainerName
         AZURE_FORM_RECOGNIZER_ENDPOINT: formrecognizer.outputs.endpoint
         AZURE_COMPUTER_VISION_ENDPOINT: useAdvancedImageProcessing ? computerVision!.outputs.endpoint : ''
@@ -2334,247 +2131,61 @@ module function 'modules/app/function.bicep' = {
   }
 }
 
-// Update your formrecognizer module
-module formrecognizer 'modules/core/ai/cognitiveservices.bicep' = {
-  name: formRecognizerName
+var wookbookContents = loadTextContent('../workbooks/workbook.json')
+var wookbookContentsSubReplaced = replace(wookbookContents, '{subscription-id}', subscription().id)
+var wookbookContentsRGReplaced = replace(wookbookContentsSubReplaced, '{resource-group}', resourceGroup().name)
+var wookbookContentsAppServicePlanReplaced = replace(wookbookContentsRGReplaced, '{app-service-plan}', webServerFarm.outputs.name)
+var wookbookContentsBackendAppServiceReplaced = replace(
+  wookbookContentsAppServicePlanReplaced,
+  '{backend-app-service}',
+  functionName
+)
+var wookbookContentsWebAppServiceReplaced = replace(
+  wookbookContentsBackendAppServiceReplaced,
+  '{web-app-service}',
+  websiteName
+)
+var wookbookContentsAdminAppServiceReplaced = replace(
+  wookbookContentsWebAppServiceReplaced,
+  '{admin-app-service}',
+  adminWebsiteName
+)
+var wookbookContentsEventGridReplaced = replace(
+  wookbookContentsAdminAppServiceReplaced,
+  '{event-grid}',
+  avmEventGridSystemTopic!.outputs.name
+)
+var wookbookContentsLogAnalyticsReplaced = replace(
+  wookbookContentsEventGridReplaced,
+  '{log-analytics-resource-id}',
+  log_analytics!.outputs.resourceId
+)
+var wookbookContentsOpenAIReplaced = replace(wookbookContentsLogAnalyticsReplaced, '{open-ai}', azureOpenAIResourceName)
+var wookbookContentsAISearchReplaced = replace(wookbookContentsOpenAIReplaced, '{ai-search}', azureAISearchName)
+var wookbookContentsStorageAccountReplaced = replace(
+  wookbookContentsAISearchReplaced,
+  '{storage-account}',
+  storage.outputs.name
+)
+module workbook './modules/monitoring/workbook.bicep' = if (enableMonitoring) {
+  name: take('module.monitoring.workbook.${solutionName}', 64)
   scope: resourceGroup()
   params: {
-    name: formRecognizerName
+    solutionName: solutionSuffix
     location: location
     tags: allTags
-    kind: 'FormRecognizer'
-    // SFI: Azure_AIServices_AuthN_Disable_Local_Auth - force Entra ID authentication.
-    disableLocalAuth: true
-
-    enablePrivateNetworking: enablePrivateNetworking
-    enableMonitoring: enableMonitoring
-    enableTelemetry: enableTelemetry
-    subnetResourceId: enablePrivateNetworking ? virtualNetwork!.outputs.pepsSubnetResourceId : null
-
-    logAnalyticsWorkspaceId: enableMonitoring ? monitoring!.outputs.logAnalyticsWorkspaceId : null
-    userAssignedResourceId: managedIdentityModule.outputs.resourceId
-    restrictOutboundNetworkAccess: true
-    allowedFqdnList: [
-      '${storageAccountName}.blob.${environment().suffixes.storage}'
-      '${storageAccountName}.queue.${environment().suffixes.storage}'
-    ]
-    privateDnsZoneResourceId: enablePrivateNetworking
-      ? avmPrivateDnsZones[dnsZoneIndex.cognitiveServices]!.outputs.resourceId
-      : ''
-    enableSystemAssigned: true
-    roleAssignments: concat(
-      [
-        {
-          roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
-          principalId: managedIdentityModule.outputs.principalId
-          principalType: 'ServicePrincipal'
-        }
-        {
-          roleDefinitionIdOrName: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
-          principalId: managedIdentityModule.outputs.principalId
-          principalType: 'ServicePrincipal'
-        }
-      ],
-      !empty(principal.id)
-        ? [
-            {
-              roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
-              principalId: principal.id
-            }
-          ]
-        : []
-    )
-  }
-  dependsOn: enablePrivateNetworking ? avmPrivateDnsZones : []
-}
-
-module contentsafety 'modules/core/ai/cognitiveservices.bicep' = {
-  name: contentSafetyName
-  scope: resourceGroup()
-  params: {
-    name: contentSafetyName
-    location: location
-    tags: allTags
-    kind: 'ContentSafety'
-    // SFI: Azure_AIServices_AuthN_Disable_Local_Auth - force Entra ID authentication.
-    disableLocalAuth: true
-
-    enablePrivateNetworking: enablePrivateNetworking
-    enableMonitoring: enableMonitoring
-    enableTelemetry: enableTelemetry
-    subnetResourceId: enablePrivateNetworking ? virtualNetwork!.outputs.pepsSubnetResourceId : null
-
-    logAnalyticsWorkspaceId: enableMonitoring ? monitoring!.outputs.logAnalyticsWorkspaceId : null
-    userAssignedResourceId: managedIdentityModule.outputs.resourceId
-    privateDnsZoneResourceId: enablePrivateNetworking
-      ? avmPrivateDnsZones[dnsZoneIndex.cognitiveServices]!.outputs.resourceId
-      : ''
-    roleAssignments: concat(
-      [
-        {
-          roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
-          principalId: managedIdentityModule.outputs.principalId
-          principalType: 'ServicePrincipal'
-        }
-      ],
-      !empty(principal.id)
-        ? [
-            {
-              roleDefinitionIdOrName: 'a97b65f3-24c7-4388-baec-2e87135dc908' //Cognitive Services User
-              principalId: principal.id
-            }
-          ]
-        : []
-    )
-  }
-  dependsOn: enablePrivateNetworking ? avmPrivateDnsZones : []
-}
-
-// If advanced image processing is used, storage account already should be publicly accessible.
-// Computer Vision requires files to be publicly accessible as per the official docsumentation: https://learn.microsoft.com/en-us/azure/ai-services/computer-vision/how-to/blob-storage-search
-var enablePrivateEndpointsStorage = enablePrivateNetworking && !useAdvancedImageProcessing
-module storage './modules/storage/storage-account/storage-account.bicep' = {
-  name: take('avm.res.storage.storage-account.${storageAccountName}', 64)
-  params: {
-    name: storageAccountName
-    location: location
-    tags: tags
-    enableTelemetry: enableTelemetry
-    supportsHttpsTrafficOnly: true
-    // SFI: Azure_Storage_DP_Enable_Infrastructure_Encryption - enforce a second layer of encryption at rest.
-    requireInfrastructureEncryption: true
-    accessTier: 'Hot'
-    skuName: 'Standard_GRS'
-    kind: 'StorageV2'
-    blobServices: {
-      containers: [
-        {
-          name: blobContainerName
-          publicAccess: 'None'
-        }
-        {
-          name: 'config'
-          publicAccess: 'None'
-        }
-      ]
-    }
-    queueServices: {
-      queues: [
-        {
-          name: 'doc-processing'
-        }
-        {
-          name: 'doc-processing-poison'
-        }
-      ]
-    }
-    // Use only user-assigned identities
-    managedIdentities: { systemAssigned: false, userAssignedResourceIds: [] }
-    roleAssignments: [
-      {
-        principalId: managedIdentityModule.outputs.principalId
-        roleDefinitionIdOrName: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
-        principalType: 'ServicePrincipal'
-      }
-      {
-        principalId: managedIdentityModule.outputs.principalId
-        roleDefinitionIdOrName: '974c5e8b-45b9-4653-ba55-5f855dd0fb88' // Storage Queue Data Contributor
-        principalType: 'ServicePrincipal'
-      }
-      {
-        principalId: managedIdentityModule.outputs.principalId
-        roleDefinitionIdOrName: 'Storage File Data Privileged Contributor'
-        principalType: 'ServicePrincipal'
-      }
-    ]
-    allowSharedKeyAccess: true
-    publicNetworkAccess: enablePrivateEndpointsStorage ? 'Disabled' : 'Enabled'
-    networkAcls: { bypass: 'AzureServices', defaultAction: enablePrivateEndpointsStorage ? 'Deny' : 'Allow' }
-    privateEndpoints: enablePrivateEndpointsStorage
-      ? [
-          {
-            name: 'pep-blob-${solutionSuffix}'
-            privateDnsZoneGroup: {
-              privateDnsZoneGroupConfigs: [
-                {
-                  name: 'storage-dns-zone-group-blob'
-                  privateDnsZoneResourceId: avmPrivateDnsZones[dnsZoneIndex.storageBlob]!.outputs.resourceId
-                }
-              ]
-            }
-            subnetResourceId: virtualNetwork!.outputs.pepsSubnetResourceId
-            service: 'blob'
-          }
-          {
-            name: 'pep-queue-${solutionSuffix}'
-            privateDnsZoneGroup: {
-              privateDnsZoneGroupConfigs: [
-                {
-                  name: 'storage-dns-zone-group-queue'
-                  privateDnsZoneResourceId: avmPrivateDnsZones[dnsZoneIndex.storageQueue]!.outputs.resourceId
-                }
-              ]
-            }
-            subnetResourceId: virtualNetwork!.outputs.pepsSubnetResourceId
-            service: 'queue'
-          }
-          {
-            name: 'pep-file-${solutionSuffix}'
-            privateDnsZoneGroup: {
-              privateDnsZoneGroupConfigs: [
-                {
-                  name: 'storage-dns-zone-group-file'
-                  privateDnsZoneResourceId: avmPrivateDnsZones[dnsZoneIndex.storageFile]!.outputs.resourceId
-                }
-              ]
-            }
-            subnetResourceId: virtualNetwork!.outputs.pepsSubnetResourceId
-            service: 'file'
-          }
-        ]
-      : []
+    serializedData: wookbookContentsStorageAccountReplaced
   }
 }
 
-module workbook 'modules/app/workbook.bicep' = if (enableMonitoring) {
-  name: 'workbook'
-  scope: resourceGroup()
+module avmEventGridSystemTopic './modules/data/event-grid.bicep' = {
+  name: take('module.data.event-grid.${solutionName}', 64)
   params: {
-    workbookDisplayName: workbookDisplayName
-    location: location
-    hostingPlanName: webServerFarm.outputs.name
-    functionName: function.outputs.functionName
-    websiteName: web.outputs.FRONTEND_API_NAME
-    adminWebsiteName: adminweb.outputs.WEBSITE_ADMIN_NAME
-    eventGridSystemTopicName: avmEventGridSystemTopic!.outputs.name
-    logAnalyticsResourceId: monitoring!.outputs.logAnalyticsWorkspaceId
-    azureOpenAIResourceName: openai.outputs.name
-    azureAISearchName: databaseType == 'CosmosDB' ? search.name : ''
-    storageAccountName: storage.outputs.name
-  }
-}
-
-module avmEventGridSystemTopic 'br/public:avm/res/event-grid/system-topic:0.6.3' = {
-  name: take('avm.res.event-grid.system-topic.${eventGridSystemTopicName}', 64)
-  params: {
-    name: eventGridSystemTopicName
+    solutionName: solutionSuffix
     source: storage.outputs.resourceId
     topicType: 'Microsoft.Storage.StorageAccounts'
     location: location
     tags: allTags
-    diagnosticSettings: enableMonitoring
-      ? [
-          {
-            name: 'diagnosticSettings'
-            workspaceResourceId: monitoring!.outputs.logAnalyticsWorkspaceId
-            metricCategories: [
-              {
-                category: 'AllMetrics'
-              }
-            ]
-          }
-        ]
-      : []
     eventSubscriptions: [
       {
         name: 'evts-${solutionSuffix}'
@@ -2601,9 +2212,6 @@ module avmEventGridSystemTopic 'br/public:avm/res/event-grid/system-topic:0.6.3'
         expirationTimeUtc: '2099-01-01T11:00:21.715Z'
       }
     ]
-    // Use only user-assigned identity
-    managedIdentities: { systemAssigned: false, userAssignedResourceIds: [managedIdentityModule.outputs.resourceId] }
-    enableTelemetry: enableTelemetry
   }
 }
 
@@ -2611,21 +2219,21 @@ var systemAssignedRoleAssignments = union(
   databaseType == 'CosmosDB'
     ? [
         {
-          principalId: searchUpdate.?outputs.systemAssignedMIPrincipalId
+          principalId: search.?outputs.identityPrincipalId
           resourceId: storage.outputs.resourceId
           roleName: 'Storage Blob Data Contributor'
           roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
           principalType: 'ServicePrincipal'
         }
         {
-          principalId: searchUpdate.?outputs.systemAssignedMIPrincipalId
+          principalId: search.?outputs.identityPrincipalId
           resourceId: openai.outputs.resourceId
           roleName: 'Cognitive Services User'
           roleDefinitionId: 'a97b65f3-24c7-4388-baec-2e87135dc908'
           principalType: 'ServicePrincipal'
         }
         {
-          principalId: searchUpdate.?outputs.systemAssignedMIPrincipalId
+          principalId: search.?outputs.identityPrincipalId
           resourceId: openai.outputs.resourceId
           roleName: 'Cognitive Services OpenAI User'
           roleDefinitionId: '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
@@ -2635,7 +2243,7 @@ var systemAssignedRoleAssignments = union(
     : [],
   [
     {
-      principalId: formrecognizer.outputs.systemAssignedMIPrincipalId
+      principalId: formrecognizer.outputs.identityPrincipalId
       resourceId: storage.outputs.resourceId
       roleName: 'Storage Blob Data Contributor'
       roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
@@ -2643,14 +2251,6 @@ var systemAssignedRoleAssignments = union(
     }
   ]
 )
-
-@description('Role assignments applied to the system-assigned identity via AVM module. Objects can include: roleDefinitionId (req), roleName, principalType, resourceId.')
-module systemAssignedIdentityRoleAssignments './modules/app/roleassignments.bicep' = {
-  name: take('module.resource-role-assignment.system-assigned', 64)
-  params: {
-    roleAssignments: systemAssignedRoleAssignments
-  }
-}
 
 var azureOpenAIModelInfo = string({
   model: azureOpenAIModel
@@ -2666,12 +2266,12 @@ var azureOpenAIEmbeddingModelInfo = string({
 
 var azureCosmosDBInfo = string({
   account_name: databaseType == 'CosmosDB' ? azureCosmosDBAccountName : ''
-  database_name: databaseType == 'CosmosDB' ? cosmosDbName : ''
-  conversations_container_name: databaseType == 'CosmosDB' ? cosmosDbContainerName : ''
+  database_name: databaseType == 'CosmosDB' ? cosmosDBModule!.outputs.databaseName : ''
+  conversations_container_name: databaseType == 'CosmosDB' ? cosmosDBModule!.outputs.containerName : ''
 })
 
 var azurePostgresDBInfo = string({
-  host_name: databaseType == 'PostgreSQL' ? postgresDBModule!.outputs.fqdn : ''
+  host_name: databaseType == 'PostgreSQL' ? postgresDBModule!.outputs.serverFqdn : ''
   database_name: databaseType == 'PostgreSQL' ? postgresDBName : ''
   user: ''
 })
@@ -2682,11 +2282,11 @@ var azureFormRecognizerInfo = string({
 
 var azureBlobStorageInfo = string({
   container_name: blobContainerName
-  account_name: storageAccountName
+  account_name: storage.outputs.name
 })
 
 var azureSpeechServiceInfo = string({
-  service_name: speechServiceName
+  service_name: speechService.outputs.name
   service_region: location
   recognizer_languages: recognizedLanguages
 })
@@ -2694,7 +2294,7 @@ var azureSpeechServiceInfo = string({
 var azureSearchServiceInfo = databaseType == 'CosmosDB'
   ? string({
       service_name: azureAISearchName
-      service: searchUpdate!.outputs.endpoint
+      service: search!.outputs.endpoint
       use_semantic_search: azureSearchUseSemanticSearch
       semantic_search_config: azureSearchSemanticSearchConfig
       index_is_prechunked: azureSearchIndexIsPrechunked
@@ -2718,15 +2318,15 @@ var azureSearchServiceInfo = databaseType == 'CosmosDB'
   : ''
 
 var azureComputerVisionInfo = string({
-  service_name: computerVisionName
+  service_name: computerVision!.outputs.name
   endpoint: useAdvancedImageProcessing ? computerVision!.outputs.endpoint : ''
-  location: useAdvancedImageProcessing ? computerVision!.outputs.location : ''
+  location: useAdvancedImageProcessing ? location : ''
   vectorize_image_api_version: computerVisionVectorizeImageApiVersion
   vectorize_image_model_version: computerVisionVectorizeImageModelVersion
 })
 
 var azureOpenaiConfigurationInfo = string({
-  service_name: speechServiceName
+  service_name: speechService.outputs.name
   stream: azureOpenAIStream
   system_message: azureOpenAISystemMessage
   stop_sequence: azureOpenAIStopSequence
@@ -2747,7 +2347,7 @@ var backendUrl = hostingModel == 'container'
 
 @description('Connection string for the Application Insights instance.')
 output APPLICATIONINSIGHTS_CONNECTION_STRING string = enableMonitoring
-  ? monitoring!.outputs.applicationInsightsConnectionString
+  ? app_insights!.outputs.connectionString
   : ''
 
 @description('App Service hosting model used (code or container).')
@@ -2805,22 +2405,22 @@ output ORCHESTRATION_STRATEGY string = orchestrationStrategy
 output BACKEND_URL string = backendUrl
 
 @description('Azure WebJobs Storage connection string for the Functions app.')
-output AzureWebJobsStorage string = function.outputs.AzureWebJobsStorage
+output AzureWebJobsStorage string = storage.outputs.name
 
 @description('Frontend web application resource name (for azd deploy).')
-output SERVICE_WEB_RESOURCE_NAME string = web.outputs.FRONTEND_API_NAME
+output SERVICE_WEB_RESOURCE_NAME string = web.outputs.name
 
 @description('Admin web application resource name (for azd deploy).')
-output SERVICE_ADMINWEB_RESOURCE_NAME string = adminweb.outputs.WEBSITE_ADMIN_NAME
+output SERVICE_ADMINWEB_RESOURCE_NAME string = adminweb.outputs.name
 
 @description('Function app resource name (for azd deploy).')
-output SERVICE_FUNCTION_RESOURCE_NAME string = function.outputs.functionName
+output SERVICE_FUNCTION_RESOURCE_NAME string = function.outputs.name
 
 @description('Frontend web application URI.')
-output FRONTEND_WEBSITE_NAME string = web.outputs.FRONTEND_API_URI
+output FRONTEND_WEBSITE_NAME string = web.outputs.appUrl
 
 @description('Admin web application URI.')
-output ADMIN_WEBSITE_NAME string = adminweb.outputs.WEBSITE_ADMIN_URI
+output ADMIN_WEBSITE_NAME string = adminweb.outputs.appUrl
 
 @description('Configured log level for applications.')
 output LOGLEVEL string = logLevel

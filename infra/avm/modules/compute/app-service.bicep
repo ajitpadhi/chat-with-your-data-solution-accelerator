@@ -34,6 +34,9 @@ param kind string = 'app,linux'
 @description('Optional. Enable/Disable usage telemetry for module.')
 param enableTelemetry bool = true
 
+@description('Optional. Resource ID of the user-assigned managed identity to be used by the Cognitive Services resource.')
+param userAssignedResourceId string = ''
+
 @description('Diagnostic settings for monitoring.')
 param diagnosticSettings array = []
 
@@ -42,6 +45,22 @@ param virtualNetworkSubnetId string = ''
 
 @description('Public network access setting.')
 param publicNetworkAccess string = 'Enabled'
+
+@description('Optional. Whether to route all outbound traffic through the virtual network.')
+param vnetRouteAllEnabled bool = false
+
+@description('Optional. Whether to route image pull traffic through the virtual network.')
+param imagePullTraffic bool = false
+
+@description('Optional. Whether to route content share traffic through the virtual network.')
+param contentShareTraffic bool = false
+
+import { privateEndpointSingleServiceType } from 'br/public:avm/utl/types/avm-common-types:0.5.1'
+@description('Optional. Configuration details for private endpoints. For security reasons, it is recommended to use private endpoints whenever possible.')
+param privateEndpoints privateEndpointSingleServiceType[]?
+
+@description('Optional. Enable end-to-end TLS encryption between the front end and worker. Requires Premium v2/v3 or Isolated v2 App Service Plan.')
+param e2eEncryptionEnabled bool = false
 
 // ============================================================================
 // AVM Module Deployment
@@ -56,7 +75,7 @@ module appService 'br/public:avm/res/web/site:0.23.1' = {
     enableTelemetry: enableTelemetry
     serverFarmResourceId: serverFarmResourceId
     managedIdentities: {
-      systemAssigned: true
+      systemAssigned: true, userAssignedResourceIds: !empty(userAssignedResourceId) ? [userAssignedResourceId] : []
     }
     siteConfig: {
       alwaysOn: alwaysOn
@@ -64,7 +83,7 @@ module appService 'br/public:avm/res/web/site:0.23.1' = {
       linuxFxVersion: linuxFxVersion
       minTlsVersion: '1.2'
     }
-    e2eEncryptionEnabled: true
+    e2eEncryptionEnabled: e2eEncryptionEnabled
     configs: [
       {
         name: 'appsettings'
@@ -79,8 +98,19 @@ module appService 'br/public:avm/res/web/site:0.23.1' = {
           httpLogs: { fileSystem: { enabled: true, retentionInDays: 1, retentionInMb: 35 } }
         }
       }
+      {
+        name:'web'
+        properties: {
+          vnetRouteAllEnabled: vnetRouteAllEnabled
+          }
+      }
     ]
+    outboundVnetRouting: {
+      contentShareTraffic: contentShareTraffic
+      imagePullTraffic: imagePullTraffic
+    }
     publicNetworkAccess: publicNetworkAccess
+    privateEndpoints: privateEndpoints
     virtualNetworkSubnetResourceId: !empty(virtualNetworkSubnetId) ? virtualNetworkSubnetId : null
     basicPublishingCredentialsPolicies: [
       {
