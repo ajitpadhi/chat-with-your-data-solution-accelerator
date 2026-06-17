@@ -213,6 +213,9 @@ param computerVisionVectorizeImageModelVersion string = '2023-04-15'
 @description('Azure AI Search Resource.')
 var azureAISearchName string = 'srch-${solutionSuffix}'
 
+@description('Optional. Azure Search vector field dimensions. Must match the embedding model dimensions. 1536 for text-embedding-3-small, 3072 for text-embedding-3-large. See https://learn.microsoft.com/en-us/azure/search/cognitive-search-skill-azure-openai-embedding#supported-dimensions-by-modelname.(Only for databaseType=CosmosDB)')
+param azureSearchDimensions string = '1536'
+
 @description('Optional. The SKU of the search service you want to create. E.g. free or standard.')
 @allowed([
   'free'
@@ -1643,6 +1646,12 @@ module keyvault './modules/security/key-vault.bicep' = {
     managedIdentityObjectId: databaseType == 'PostgreSQL'
       ? managedIdentityModule!.outputs.principalId
       : ''
+    secrets: [
+      {
+        name: 'FUNCTION-KEY'
+        value: clientKey
+      }
+    ]
   }
 }
 
@@ -1702,7 +1711,7 @@ module model_deployments './modules/ai/ai-foundry-model-deployment.bicep' = [for
 module computerVision './modules/ai/ai-services.bicep' = if (useAdvancedImageProcessing) {
   name: take('module.ai-services.computerVision.${solutionName}', 64)
   params: {
-    solutionName: solutionName
+    solutionName: solutionSuffix
     namePrefix: 'cv'
     kind: 'ComputerVision'
     location: computerVisionLocation != '' ? computerVisionLocation : location
@@ -1819,6 +1828,7 @@ module web './modules/compute/app-service.bicep' = {
     tags: union(tags, { 'azd-service-name': 'web' })
     linuxFxVersion: webLinuxFxVersion
     serverFarmResourceId: webServerFarm.outputs.resourceId
+    userAssignedIdentityId: managedIdentityModule!.outputs.resourceId
     appSettings: union(
       {
         AZURE_BLOB_ACCOUNT_NAME: storage.outputs.name
@@ -1888,6 +1898,9 @@ module web './modules/compute/app-service.bicep' = {
                 AZURE_POSTGRESQL_HOST_NAME: postgresDBModule!.outputs.serverFqdn
                 AZURE_POSTGRESQL_DATABASE_NAME: postgresDBName
                 AZURE_POSTGRESQL_USER: managedIdentityModule!.outputs.name
+                MANAGED_IDENTITY_CLIENT_ID: managedIdentityModule!.outputs.clientId
+                MANAGED_IDENTITY_RESOURCE_ID: managedIdentityModule!.outputs.resourceId
+                AZURE_CLIENT_ID: managedIdentityModule!.outputs.clientId
               }
             : {}
     )
@@ -1961,6 +1974,7 @@ module adminweb './modules/compute/app-service.bicep' = {
     tags: union(tags, { 'azd-service-name': hostingModel == 'container' ? 'adminweb-docker' : 'adminweb' })
     linuxFxVersion: adminWebLinuxFxVersion
     serverFarmResourceId: webServerFarm.outputs.resourceId
+    userAssignedIdentityId: databaseType == 'PostgreSQL' ? managedIdentityModule!.outputs.resourceId : ''
     appSettings: union(
       {
         AZURE_BLOB_ACCOUNT_NAME: storage.outputs.name
@@ -1986,7 +2000,7 @@ module adminweb './modules/compute/app-service.bicep' = {
         AZURE_OPENAI_EMBEDDING_MODEL_VERSION: azureOpenAIEmbeddingModelVersion
 
         USE_ADVANCED_IMAGE_PROCESSING: useAdvancedImageProcessing
-        BACKEND_URL: 'https://${functionName}.azurewebsites.net'
+        BACKEND_URL: 'https://${hostingModel == 'container' ? '${functionName}-docker' : functionName}.azurewebsites.net'
         DOCUMENT_PROCESSING_QUEUE_NAME: queueName
         FUNCTION_KEY: clientKey
         ORCHESTRATION_STRATEGY: orchestrationStrategy
@@ -2023,7 +2037,9 @@ module adminweb './modules/compute/app-service.bicep' = {
             ? {
                 AZURE_POSTGRESQL_HOST_NAME: postgresDBModule!.outputs.serverFqdn
                 AZURE_POSTGRESQL_DATABASE_NAME: postgresDBName
-                AZURE_POSTGRESQL_USER: adminWebsiteName
+                AZURE_POSTGRESQL_USER: managedIdentityModule!.outputs.name
+                MANAGED_IDENTITY_CLIENT_ID: managedIdentityModule.outputs.clientId
+                MANAGED_IDENTITY_RESOURCE_ID: managedIdentityModule.outputs.resourceId
               }
             : {}
     )
@@ -2072,10 +2088,10 @@ module searchRoleBackend './modules/identity/role-assignments.bicep' = {
   }
 }
 
-module function './modules/compute/function-app.bicep' = if (hostingModel == 'code') {
+module function './modules/compute/function-app.bicep' = {
   name: hostingModel == 'container' ? '${functionName}-docker' : functionName
   params: {
-    name: functionName
+    name: hostingModel == 'container' ? '${functionName}-docker' : functionName
     location: location
     tags: union(tags, { 'azd-service-name': 'function' })
     kind: hostingModel == 'container' ? 'functionapp,linux,container' : 'functionapp,linux'
@@ -2083,7 +2099,9 @@ module function './modules/compute/function-app.bicep' = if (hostingModel == 'co
     runtimeVersion: '3.11'
     dockerFullImageName: hostingModel == 'container' ? '${registryName}.azurecr.io/rag-backend:${appversion}' : ''
     serverFarmResourceId: webServerFarm.outputs.resourceId
-    applicationInsightsName: app_insights!.outputs.name
+    userAssignedIdentityId: databaseType == 'PostgreSQL' ? managedIdentityModule!.outputs.resourceId : ''
+    userAssignedIdentityClientId: databaseType == 'PostgreSQL' ? managedIdentityModule!.outputs.clientId : ''
+    applicationInsightsName: enableMonitoring ? app_insights!.outputs.name : ''
     storageAccountName: storage.outputs.name
     appSettings: union(
       {
@@ -2094,6 +2112,7 @@ module function './modules/compute/function-app.bicep' = if (hostingModel == 'co
         AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_API_VERSION: computerVisionVectorizeImageApiVersion
         AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_MODEL_VERSION: computerVisionVectorizeImageModelVersion
         AZURE_CONTENT_SAFETY_ENDPOINT: contentsafety.outputs.endpoint
+        AZURE_KEY_VAULT_ENDPOINT: keyvault.outputs.uri
         AZURE_OPENAI_MODEL: azureOpenAIModel
         AZURE_OPENAI_MODEL_NAME: azureOpenAIModelName
         AZURE_OPENAI_MODEL_VERSION: azureOpenAIModelVersion
@@ -2102,12 +2121,18 @@ module function './modules/compute/function-app.bicep' = if (hostingModel == 'co
         AZURE_OPENAI_EMBEDDING_MODEL_VERSION: azureOpenAIEmbeddingModelVersion
         AZURE_OPENAI_RESOURCE: azureOpenAIResourceName
         AZURE_OPENAI_API_VERSION: azureOpenAIApiVersion
-        USE_ADVANCED_IMAGE_PROCESSING: useAdvancedImageProcessing
+        USE_ADVANCED_IMAGE_PROCESSING: useAdvancedImageProcessing ? 'true' : 'false'
         DOCUMENT_PROCESSING_QUEUE_NAME: queueName
         ORCHESTRATION_STRATEGY: orchestrationStrategy
         LOGLEVEL: logLevel
+        PACKAGE_LOGGING_LEVEL: 'WARNING'
+        AZURE_LOGGING_PACKAGES: ''
         AZURE_OPENAI_SYSTEM_MESSAGE: azureOpenAISystemMessage
         DATABASE_TYPE: databaseType
+        APP_ENV: appEnvironment
+        BACKEND_URL: backendUrl
+        AZURE_SEARCH_DIMENSIONS: azureSearchDimensions
+        APPLICATIONINSIGHTS_ENABLED: enableMonitoring ? 'true' : 'false'
       },
       // Conditionally add database-specific settings
       databaseType == 'CosmosDB'
@@ -2132,6 +2157,9 @@ module function './modules/compute/function-app.bicep' = if (hostingModel == 'co
                 AZURE_POSTGRESQL_HOST_NAME: postgresDBModule!.outputs.serverFqdn
                 AZURE_POSTGRESQL_DATABASE_NAME: postgresDBName
                 AZURE_POSTGRESQL_USER: managedIdentityModule!.outputs.name
+                MANAGED_IDENTITY_CLIENT_ID: managedIdentityModule!.outputs.clientId
+                MANAGED_IDENTITY_RESOURCE_ID: managedIdentityModule!.outputs.resourceId
+                AZURE_CLIENT_ID: managedIdentityModule!.outputs.clientId
               }
             : {}
     )
@@ -2174,7 +2202,7 @@ module searchRoleFunction './modules/identity/role-assignments.bicep' = {
 module storageBlobRoleFunction './modules/identity/role-assignments.bicep' = {
   name: 'storage-blob-role-function'
   params: {
-    principalId: function!.outputs.principalId
+    principalId: databaseType == 'PostgreSQL' ? managedIdentityModule!.outputs.principalId : function!.outputs.principalId
     roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
     principalType: 'ServicePrincipal'
   }
@@ -2184,7 +2212,7 @@ module storageBlobRoleFunction './modules/identity/role-assignments.bicep' = {
 module storageQueueRoleFunction './modules/identity/role-assignments.bicep' = {
   name: 'storage-queue-role-function'
   params: {
-    principalId: function!.outputs.principalId
+    principalId: databaseType == 'PostgreSQL' ? managedIdentityModule!.outputs.principalId : function!.outputs.principalId
     roleDefinitionId: '974c5e8b-45b9-4653-ba55-5f855dd0fb88'
     principalType: 'ServicePrincipal'
   }
@@ -2217,7 +2245,7 @@ var wookbookContentsEventGridReplaced = replace(
 var wookbookContentsLogAnalyticsReplaced = replace(
   wookbookContentsEventGridReplaced,
   '{log-analytics-resource-id}',
-  log_analytics!.outputs.resourceId
+  enableMonitoring ? log_analytics!.outputs.resourceId : ''
 )
 var wookbookContentsOpenAIReplaced = replace(wookbookContentsLogAnalyticsReplaced, '{open-ai}', openai.outputs.name)
 var wookbookContentsAISearchReplaced = replace(wookbookContentsOpenAIReplaced, '{ai-search}', search!.outputs.name)
@@ -2226,7 +2254,7 @@ var wookbookContentsStorageAccountReplaced = replace(
   '{storage-account}',
   storage.outputs.name
 )
-module workbook './modules/monitoring/workbook.bicep' = {
+module workbook './modules/monitoring/workbook.bicep' = if (enableMonitoring) {
   name: take('module.monitoring.workbook.${solutionName}', 64)
   scope: resourceGroup()
   params: {
@@ -2413,7 +2441,7 @@ var azureSearchServiceInfo = databaseType == 'CosmosDB'
   : ''
 
 var azureComputerVisionInfo = string({
-  service_name: computerVision!.outputs.name
+  service_name: speechService.outputs.name
   endpoint: useAdvancedImageProcessing ? computerVision!.outputs.endpoint : ''
   location: useAdvancedImageProcessing ? location : ''
   vectorize_image_api_version: computerVisionVectorizeImageApiVersion

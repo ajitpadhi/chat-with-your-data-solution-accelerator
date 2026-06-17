@@ -34,6 +34,12 @@ param dockerFullImageName string = ''
 @description('Name of the Application Insights instance.')
 param applicationInsightsName string = ''
 
+@description('Resource ID of a user-assigned managed identity to attach to the Function App.')
+param userAssignedIdentityId string = ''
+
+@description('Optional. The client ID of the user assigned identity for the function app. This is required to set the AZURE_CLIENT_ID app setting so the function app can authenticate with the user assigned managed identity.')
+param userAssignedIdentityClientId string = ''
+
 @description('Resource kind for the site (e.g., functionapp,linux).')
 param kind string = 'functionapp,linux'
 
@@ -53,7 +59,6 @@ param numberOfWorkers int = -1
 // Variables
 // ============================================================================
 
-var linuxFxVersion = '${toUpper(runtimeStack)}|${runtimeVersion}'
 var useDocker = !empty(dockerFullImageName)
 var baseAppSettings = union({
   WEBSITES_ENABLE_APP_SERVICE_STORAGE: 'false'
@@ -65,6 +70,7 @@ var baseAppSettings = union({
   // Set the storage account settings to use user managed identity authentication
   AzureWebJobsStorage__accountName: storageAccountName
   AzureWebJobsStorage__credential: 'managedidentity'
+  AzureWebJobsStorage__clientId: userAssignedIdentityClientId
 },
   !useDocker ? { FUNCTIONS_WORKER_RUNTIME: runtimeStack } : {},
   runtimeStack == 'python' && !useDocker ? { PYTHON_ENABLE_GUNICORN_MULTIWORKERS: 'true' } : {},
@@ -73,6 +79,14 @@ var baseAppSettings = union({
       : {}
 )
 var configSettings = union(baseAppSettings, appSettings)
+var identityConfig = userAssignedIdentityId == ''
+  ? { type: 'SystemAssigned' }
+  : {
+      type: 'SystemAssigned, UserAssigned'
+      userAssignedIdentities: {
+        '${userAssignedIdentityId}': {}
+      }
+    }
 
 // ============================================================================
 // Resource Deployment
@@ -83,10 +97,11 @@ resource functionApp 'Microsoft.Web/sites@2025-03-01' = {
   location: location
   tags: tags
   kind: kind
+  identity: identityConfig
   properties: {
     serverFarmId: serverFarmResourceId
     siteConfig: {
-      linuxFxVersion: linuxFxVersion
+      linuxFxVersion: !empty(dockerFullImageName) ? 'DOCKER|${dockerFullImageName}' : '${toUpper(runtimeStack)}|${runtimeVersion}'
       alwaysOn: true
       ftpsState: 'FtpsOnly'
       minTlsVersion: '1.2'
@@ -102,8 +117,6 @@ resource functionApp 'Microsoft.Web/sites@2025-03-01' = {
     clientAffinityEnabled: false
     httpsOnly: true
   }
-
-  identity: { type: 'SystemAssigned' }
 
   resource basicPublishingCredentialsPoliciesFtp 'basicPublishingCredentialsPolicies' = {
     name: 'ftp'

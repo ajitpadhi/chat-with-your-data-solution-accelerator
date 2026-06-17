@@ -42,6 +42,9 @@ param managedIdentityObjectId string = ''
 @description('The Principal ID.')
 param principalId string = ''
 
+@description('Secrets to store in the vault (name/value pairs).')
+param secrets array = []
+
 // ============================================================================
 // Key Vault Resource
 // ============================================================================
@@ -100,6 +103,17 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     }
   }
 }
+
+resource keyVaultSecret 'Microsoft.KeyVault/vaults/secrets@2022-07-01' = [
+  for secret in secrets: {
+     name: secret.name
+     parent: keyVault
+     tags: tags
+     properties: {
+       value: secret.value
+     }
+  }
+]
 
 // ============================================================================
 // Outputs

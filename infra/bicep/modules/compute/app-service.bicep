@@ -25,6 +25,9 @@ param linuxFxVersion string
 @description('Application settings key-value pairs.')
 param appSettings object = {}
 
+@description('Optional. The resource ID of the user-assigned managed identity to attach.')
+param userAssignedIdentityId string = ''
+
 @description('Whether to enable Always On.')
 param alwaysOn bool = true
 
@@ -52,14 +55,20 @@ param numberOfWorkers int = -1
 // ============================================================================
 // Resource Deployment
 // ============================================================================
+var identityConfig = userAssignedIdentityId == ''
+  ? { type: 'SystemAssigned' }
+  : {
+      type: 'SystemAssigned, UserAssigned'
+      userAssignedIdentities: {
+        '${userAssignedIdentityId}': {}
+      }
+    }
 resource appService 'Microsoft.Web/sites@2025-03-01' = {
   name: name
   location: location
   tags: tags
   kind: kind
-  identity: {
-    type: 'SystemAssigned'
-  }
+  identity: identityConfig
   properties: {
     serverFarmId: serverFarmResourceId
     publicNetworkAccess: publicNetworkAccess

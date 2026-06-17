@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "6160313789832078472"
+      "templateHash": "3457817702326075124"
     }
   },
   "parameters": {
@@ -2747,7 +2747,15 @@
           "principalId": {
             "value": "[parameters('principal').id]"
           },
-          "managedIdentityObjectId": "[if(equals(parameters('databaseType'), 'PostgreSQL'), createObject('value', reference('managedIdentityModule').outputs.principalId.value), createObject('value', ''))]"
+          "managedIdentityObjectId": "[if(equals(parameters('databaseType'), 'PostgreSQL'), createObject('value', reference('managedIdentityModule').outputs.principalId.value), createObject('value', ''))]",
+          "secrets": {
+            "value": [
+              {
+                "name": "FUNCTION-KEY",
+                "value": "[variables('clientKey')]"
+              }
+            ]
+          }
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -2756,7 +2764,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14517529723308976153"
+              "templateHash": "9691228644353865051"
             }
           },
           "parameters": {
@@ -2845,6 +2853,13 @@
               "metadata": {
                 "description": "The Principal ID."
               }
+            },
+            "secrets": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "Secrets to store in the vault (name/value pairs)."
+              }
             }
           },
           "resources": [
@@ -2870,6 +2885,22 @@
                   "defaultAction": "Allow"
                 }
               }
+            },
+            {
+              "copy": {
+                "name": "keyVaultSecret",
+                "count": "[length(parameters('secrets'))]"
+              },
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2022-07-01",
+              "name": "[format('{0}/{1}', parameters('name'), parameters('secrets')[copyIndex()].name)]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "value": "[parameters('secrets')[copyIndex()].value]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]"
+              ]
             }
           ],
           "outputs": {
@@ -3231,7 +3262,7 @@
         "mode": "Incremental",
         "parameters": {
           "solutionName": {
-            "value": "[parameters('solutionName')]"
+            "value": "[variables('solutionSuffix')]"
           },
           "namePrefix": {
             "value": "cv"
@@ -4776,7 +4807,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "12448820547903614622"
+              "templateHash": "12631440110196055078"
             }
           },
           "parameters": {
@@ -4823,6 +4854,13 @@
               "defaultValue": {},
               "metadata": {
                 "description": "Application settings key-value pairs."
+              }
+            },
+            "userAssignedIdentityId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The resource ID of the user-assigned managed identity to attach."
               }
             },
             "alwaysOn": {
@@ -4882,6 +4920,9 @@
               }
             }
           },
+          "variables": {
+            "identityConfig": "[if(equals(parameters('userAssignedIdentityId'), ''), createObject('type', 'SystemAssigned'), createObject('type', 'SystemAssigned, UserAssigned', 'userAssignedIdentities', createObject(format('{0}', parameters('userAssignedIdentityId')), createObject())))]"
+          },
           "resources": [
             {
               "type": "Microsoft.Web/sites/basicPublishingCredentialsPolicies",
@@ -4912,9 +4953,7 @@
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
               "kind": "[parameters('kind')]",
-              "identity": {
-                "type": "SystemAssigned"
-              },
+              "identity": "[variables('identityConfig')]",
               "properties": {
                 "serverFarmId": "[parameters('serverFarmResourceId')]",
                 "publicNetworkAccess": "[parameters('publicNetworkAccess')]",
@@ -5360,7 +5399,7 @@
             "value": "[reference('webServerFarm').outputs.resourceId.value]"
           },
           "appSettings": {
-            "value": "[union(createObject('AZURE_BLOB_ACCOUNT_NAME', reference('storage').outputs.name.value, 'AZURE_BLOB_CONTAINER_NAME', variables('blobContainerName'), 'AZURE_FORM_RECOGNIZER_ENDPOINT', reference('formrecognizer').outputs.endpoint.value, 'AZURE_COMPUTER_VISION_ENDPOINT', if(parameters('useAdvancedImageProcessing'), reference('computerVision').outputs.endpoint.value, ''), 'AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_API_VERSION', parameters('computerVisionVectorizeImageApiVersion'), 'AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_MODEL_VERSION', parameters('computerVisionVectorizeImageModelVersion'), 'AZURE_CONTENT_SAFETY_ENDPOINT', reference('contentsafety').outputs.endpoint.value, 'AZURE_OPENAI_RESOURCE', variables('azureOpenAIResourceName'), 'AZURE_OPENAI_MODEL', parameters('azureOpenAIModel'), 'AZURE_OPENAI_MODEL_NAME', parameters('azureOpenAIModelName'), 'AZURE_OPENAI_MODEL_VERSION', parameters('azureOpenAIModelVersion'), 'AZURE_OPENAI_TEMPERATURE', parameters('azureOpenAITemperature'), 'AZURE_OPENAI_TOP_P', parameters('azureOpenAITopP'), 'AZURE_OPENAI_MAX_TOKENS', parameters('azureOpenAIMaxTokens'), 'AZURE_OPENAI_STOP_SEQUENCE', parameters('azureOpenAIStopSequence'), 'AZURE_OPENAI_SYSTEM_MESSAGE', parameters('azureOpenAISystemMessage'), 'AZURE_OPENAI_API_VERSION', parameters('azureOpenAIApiVersion'), 'AZURE_OPENAI_STREAM', parameters('azureOpenAIStream'), 'AZURE_OPENAI_EMBEDDING_MODEL', parameters('azureOpenAIEmbeddingModel'), 'AZURE_OPENAI_EMBEDDING_MODEL_NAME', parameters('azureOpenAIEmbeddingModelName'), 'AZURE_OPENAI_EMBEDDING_MODEL_VERSION', parameters('azureOpenAIEmbeddingModelVersion'), 'USE_ADVANCED_IMAGE_PROCESSING', parameters('useAdvancedImageProcessing'), 'BACKEND_URL', format('https://{0}.azurewebsites.net', variables('functionName')), 'DOCUMENT_PROCESSING_QUEUE_NAME', variables('queueName'), 'FUNCTION_KEY', variables('clientKey'), 'ORCHESTRATION_STRATEGY', parameters('orchestrationStrategy'), 'CONVERSATION_FLOW', parameters('conversationFlow'), 'LOGLEVEL', parameters('logLevel'), 'DATABASE_TYPE', parameters('databaseType')), if(equals(parameters('databaseType'), 'CosmosDB'), createObject('AZURE_SEARCH_SERVICE', format('https://{0}.search.windows.net', variables('azureAISearchName')), 'AZURE_SEARCH_INDEX', variables('azureSearchIndex'), 'AZURE_SEARCH_USE_SEMANTIC_SEARCH', parameters('azureSearchUseSemanticSearch'), 'AZURE_SEARCH_SEMANTIC_SEARCH_CONFIG', parameters('azureSearchSemanticSearchConfig'), 'AZURE_SEARCH_INDEX_IS_PRECHUNKED', parameters('azureSearchIndexIsPrechunked'), 'AZURE_SEARCH_TOP_K', parameters('azureSearchTopK'), 'AZURE_SEARCH_ENABLE_IN_DOMAIN', parameters('azureSearchEnableInDomain'), 'AZURE_SEARCH_FILENAME_COLUMN', parameters('azureSearchFilenameColumn'), 'AZURE_SEARCH_FILTER', parameters('azureSearchFilter'), 'AZURE_SEARCH_FIELDS_ID', parameters('azureSearchFieldId'), 'AZURE_SEARCH_CONTENT_COLUMN', parameters('azureSearchContentColumn'), 'AZURE_SEARCH_CONTENT_VECTOR_COLUMN', parameters('azureSearchVectorColumn'), 'AZURE_SEARCH_TITLE_COLUMN', parameters('azureSearchTitleColumn'), 'AZURE_SEARCH_FIELDS_METADATA', parameters('azureSearchFieldsMetadata'), 'AZURE_SEARCH_SOURCE_COLUMN', parameters('azureSearchSourceColumn'), 'AZURE_SEARCH_CHUNK_COLUMN', parameters('azureSearchChunkColumn'), 'AZURE_SEARCH_OFFSET_COLUMN', parameters('azureSearchOffsetColumn'), 'AZURE_SEARCH_URL_COLUMN', parameters('azureSearchUrlColumn'), 'AZURE_SEARCH_DATASOURCE_NAME', variables('azureSearchDatasource'), 'AZURE_SEARCH_INDEXER_NAME', variables('azureSearchIndexer'), 'AZURE_SEARCH_USE_INTEGRATED_VECTORIZATION', parameters('azureSearchUseIntegratedVectorization')), if(equals(parameters('databaseType'), 'PostgreSQL'), createObject('AZURE_POSTGRESQL_HOST_NAME', reference('postgresDBModule').outputs.serverFqdn.value, 'AZURE_POSTGRESQL_DATABASE_NAME', variables('postgresDBName'), 'AZURE_POSTGRESQL_USER', variables('adminWebsiteName')), createObject())))]"
+            "value": "[union(createObject('AZURE_BLOB_ACCOUNT_NAME', reference('storage').outputs.name.value, 'AZURE_BLOB_CONTAINER_NAME', variables('blobContainerName'), 'AZURE_FORM_RECOGNIZER_ENDPOINT', reference('formrecognizer').outputs.endpoint.value, 'AZURE_COMPUTER_VISION_ENDPOINT', if(parameters('useAdvancedImageProcessing'), reference('computerVision').outputs.endpoint.value, ''), 'AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_API_VERSION', parameters('computerVisionVectorizeImageApiVersion'), 'AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_MODEL_VERSION', parameters('computerVisionVectorizeImageModelVersion'), 'AZURE_CONTENT_SAFETY_ENDPOINT', reference('contentsafety').outputs.endpoint.value, 'AZURE_OPENAI_RESOURCE', variables('azureOpenAIResourceName'), 'AZURE_OPENAI_MODEL', parameters('azureOpenAIModel'), 'AZURE_OPENAI_MODEL_NAME', parameters('azureOpenAIModelName'), 'AZURE_OPENAI_MODEL_VERSION', parameters('azureOpenAIModelVersion'), 'AZURE_OPENAI_TEMPERATURE', parameters('azureOpenAITemperature'), 'AZURE_OPENAI_TOP_P', parameters('azureOpenAITopP'), 'AZURE_OPENAI_MAX_TOKENS', parameters('azureOpenAIMaxTokens'), 'AZURE_OPENAI_STOP_SEQUENCE', parameters('azureOpenAIStopSequence'), 'AZURE_OPENAI_SYSTEM_MESSAGE', parameters('azureOpenAISystemMessage'), 'AZURE_OPENAI_API_VERSION', parameters('azureOpenAIApiVersion'), 'AZURE_OPENAI_STREAM', parameters('azureOpenAIStream'), 'AZURE_OPENAI_EMBEDDING_MODEL', parameters('azureOpenAIEmbeddingModel'), 'AZURE_OPENAI_EMBEDDING_MODEL_NAME', parameters('azureOpenAIEmbeddingModelName'), 'AZURE_OPENAI_EMBEDDING_MODEL_VERSION', parameters('azureOpenAIEmbeddingModelVersion'), 'USE_ADVANCED_IMAGE_PROCESSING', parameters('useAdvancedImageProcessing'), 'BACKEND_URL', format('https://{0}.azurewebsites.net', variables('functionName')), 'DOCUMENT_PROCESSING_QUEUE_NAME', variables('queueName'), 'FUNCTION_KEY', variables('clientKey'), 'ORCHESTRATION_STRATEGY', parameters('orchestrationStrategy'), 'CONVERSATION_FLOW', parameters('conversationFlow'), 'LOGLEVEL', parameters('logLevel'), 'DATABASE_TYPE', parameters('databaseType')), if(equals(parameters('databaseType'), 'CosmosDB'), createObject('AZURE_SEARCH_SERVICE', format('https://{0}.search.windows.net', variables('azureAISearchName')), 'AZURE_SEARCH_INDEX', variables('azureSearchIndex'), 'AZURE_SEARCH_USE_SEMANTIC_SEARCH', parameters('azureSearchUseSemanticSearch'), 'AZURE_SEARCH_SEMANTIC_SEARCH_CONFIG', parameters('azureSearchSemanticSearchConfig'), 'AZURE_SEARCH_INDEX_IS_PRECHUNKED', parameters('azureSearchIndexIsPrechunked'), 'AZURE_SEARCH_TOP_K', parameters('azureSearchTopK'), 'AZURE_SEARCH_ENABLE_IN_DOMAIN', parameters('azureSearchEnableInDomain'), 'AZURE_SEARCH_FILENAME_COLUMN', parameters('azureSearchFilenameColumn'), 'AZURE_SEARCH_FILTER', parameters('azureSearchFilter'), 'AZURE_SEARCH_FIELDS_ID', parameters('azureSearchFieldId'), 'AZURE_SEARCH_CONTENT_COLUMN', parameters('azureSearchContentColumn'), 'AZURE_SEARCH_CONTENT_VECTOR_COLUMN', parameters('azureSearchVectorColumn'), 'AZURE_SEARCH_TITLE_COLUMN', parameters('azureSearchTitleColumn'), 'AZURE_SEARCH_FIELDS_METADATA', parameters('azureSearchFieldsMetadata'), 'AZURE_SEARCH_SOURCE_COLUMN', parameters('azureSearchSourceColumn'), 'AZURE_SEARCH_CHUNK_COLUMN', parameters('azureSearchChunkColumn'), 'AZURE_SEARCH_OFFSET_COLUMN', parameters('azureSearchOffsetColumn'), 'AZURE_SEARCH_URL_COLUMN', parameters('azureSearchUrlColumn'), 'AZURE_SEARCH_DATASOURCE_NAME', variables('azureSearchDatasource'), 'AZURE_SEARCH_INDEXER_NAME', variables('azureSearchIndexer'), 'AZURE_SEARCH_USE_INTEGRATED_VECTORIZATION', parameters('azureSearchUseIntegratedVectorization')), if(equals(parameters('databaseType'), 'PostgreSQL'), createObject('AZURE_POSTGRESQL_HOST_NAME', reference('postgresDBModule').outputs.serverFqdn.value, 'AZURE_POSTGRESQL_DATABASE_NAME', variables('postgresDBName'), 'AZURE_POSTGRESQL_USER', reference('managedIdentityModule').outputs.name.value), createObject())))]"
           }
         },
         "template": {
@@ -5370,7 +5409,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "12448820547903614622"
+              "templateHash": "12631440110196055078"
             }
           },
           "parameters": {
@@ -5417,6 +5456,13 @@
               "defaultValue": {},
               "metadata": {
                 "description": "Application settings key-value pairs."
+              }
+            },
+            "userAssignedIdentityId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The resource ID of the user-assigned managed identity to attach."
               }
             },
             "alwaysOn": {
@@ -5476,6 +5522,9 @@
               }
             }
           },
+          "variables": {
+            "identityConfig": "[if(equals(parameters('userAssignedIdentityId'), ''), createObject('type', 'SystemAssigned'), createObject('type', 'SystemAssigned, UserAssigned', 'userAssignedIdentities', createObject(format('{0}', parameters('userAssignedIdentityId')), createObject())))]"
+          },
           "resources": [
             {
               "type": "Microsoft.Web/sites/basicPublishingCredentialsPolicies",
@@ -5506,9 +5555,7 @@
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
               "kind": "[parameters('kind')]",
-              "identity": {
-                "type": "SystemAssigned"
-              },
+              "identity": "[variables('identityConfig')]",
               "properties": {
                 "serverFarmId": "[parameters('serverFarmResourceId')]",
                 "publicNetworkAccess": "[parameters('publicNetworkAccess')]",
@@ -5618,6 +5665,7 @@
         "computerVision",
         "contentsafety",
         "formrecognizer",
+        "managedIdentityModule",
         "postgresDBModule",
         "storage",
         "webServerFarm"
@@ -5928,7 +5976,6 @@
       ]
     },
     "function": {
-      "condition": "[equals(parameters('hostingModel'), 'code')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[if(equals(parameters('hostingModel'), 'container'), format('{0}-docker', variables('functionName')), variables('functionName'))]",
@@ -5938,9 +5985,7 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "name": {
-            "value": "[variables('functionName')]"
-          },
+          "name": "[if(equals(parameters('hostingModel'), 'container'), createObject('value', format('{0}-docker', variables('functionName'))), createObject('value', variables('functionName')))]",
           "location": {
             "value": "[parameters('location')]"
           },
@@ -5958,9 +6003,7 @@
           "serverFarmResourceId": {
             "value": "[reference('webServerFarm').outputs.resourceId.value]"
           },
-          "applicationInsightsName": {
-            "value": "[reference('app_insights').outputs.name.value]"
-          },
+          "applicationInsightsName": "[if(parameters('enableMonitoring'), createObject('value', reference('app_insights').outputs.name.value), createObject('value', ''))]",
           "storageAccountName": {
             "value": "[reference('storage').outputs.name.value]"
           },
@@ -5975,7 +6018,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "2643850236903358754"
+              "templateHash": "12981105063709185742"
             }
           },
           "parameters": {
@@ -6045,6 +6088,13 @@
                 "description": "Name of the Application Insights instance."
               }
             },
+            "userAssignedIdentityId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Resource ID of a user-assigned managed identity to attach to the Function App."
+              }
+            },
             "kind": {
               "type": "string",
               "defaultValue": "functionapp,linux",
@@ -6082,8 +6132,8 @@
             }
           },
           "variables": {
-            "linuxFxVersion": "[format('{0}|{1}', toUpper(parameters('runtimeStack')), parameters('runtimeVersion'))]",
-            "useDocker": "[not(empty(parameters('dockerFullImageName')))]"
+            "useDocker": "[not(empty(parameters('dockerFullImageName')))]",
+            "identityConfig": "[if(equals(parameters('userAssignedIdentityId'), ''), createObject('type', 'SystemAssigned'), createObject('type', 'SystemAssigned, UserAssigned', 'userAssignedIdentities', createObject(format('{0}', parameters('userAssignedIdentityId')), createObject())))]"
           },
           "resources": [
             {
@@ -6115,10 +6165,11 @@
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
               "kind": "[parameters('kind')]",
+              "identity": "[variables('identityConfig')]",
               "properties": {
                 "serverFarmId": "[parameters('serverFarmResourceId')]",
                 "siteConfig": {
-                  "linuxFxVersion": "[variables('linuxFxVersion')]",
+                  "linuxFxVersion": "[if(not(empty(parameters('dockerFullImageName'))), format('DOCKER|{0}', parameters('dockerFullImageName')), format('{0}|{1}', toUpper(parameters('runtimeStack')), parameters('runtimeVersion')))]",
                   "alwaysOn": true,
                   "ftpsState": "FtpsOnly",
                   "minTlsVersion": "1.2",
@@ -6136,9 +6187,6 @@
                 },
                 "clientAffinityEnabled": false,
                 "httpsOnly": true
-              },
-              "identity": {
-                "type": "SystemAssigned"
               }
             },
             {
@@ -6461,9 +6509,7 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "principalId": {
-            "value": "[reference('function').outputs.principalId.value]"
-          },
+          "principalId": "[if(equals(parameters('databaseType'), 'PostgreSQL'), createObject('value', reference('managedIdentityModule').outputs.principalId.value), createObject('value', reference('function').outputs.principalId.value))]",
           "roleDefinitionId": {
             "value": "ba92f5b4-2d11-453d-a403-e96b0029c9fe"
           },
@@ -6524,7 +6570,8 @@
         }
       },
       "dependsOn": [
-        "function"
+        "function",
+        "managedIdentityModule"
       ]
     },
     "storageQueueRoleFunction": {
@@ -6537,9 +6584,7 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "principalId": {
-            "value": "[reference('function').outputs.principalId.value]"
-          },
+          "principalId": "[if(equals(parameters('databaseType'), 'PostgreSQL'), createObject('value', reference('managedIdentityModule').outputs.principalId.value), createObject('value', reference('function').outputs.principalId.value))]",
           "roleDefinitionId": {
             "value": "974c5e8b-45b9-4653-ba55-5f855dd0fb88"
           },
@@ -6600,10 +6645,12 @@
         }
       },
       "dependsOn": [
-        "function"
+        "function",
+        "managedIdentityModule"
       ]
     },
     "workbook": {
+      "condition": "[parameters('enableMonitoring')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[take(format('module.monitoring.workbook.{0}', parameters('solutionName')), 64)]",
@@ -6623,7 +6670,7 @@
             "value": "[variables('allTags')]"
           },
           "serializedData": {
-            "value": "[replace(replace(replace(replace(replace(replace(replace(replace(replace(variables('wookbookContentsRGReplaced'), '{app-service-plan}', reference('webServerFarm').outputs.name.value), '{backend-app-service}', reference('function').outputs.name.value), '{web-app-service}', reference('web').outputs.name.value), '{admin-app-service}', reference('adminweb').outputs.name.value), '{event-grid}', reference('avmEventGridSystemTopic').outputs.name.value), '{log-analytics-resource-id}', reference('log_analytics').outputs.resourceId.value), '{open-ai}', reference('openai').outputs.name.value), '{ai-search}', reference('search').outputs.name.value), '{storage-account}', reference('storage').outputs.name.value)]"
+            "value": "[replace(replace(replace(replace(replace(replace(replace(replace(replace(variables('wookbookContentsRGReplaced'), '{app-service-plan}', reference('webServerFarm').outputs.name.value), '{backend-app-service}', reference('function').outputs.name.value), '{web-app-service}', reference('web').outputs.name.value), '{admin-app-service}', reference('adminweb').outputs.name.value), '{event-grid}', reference('avmEventGridSystemTopic').outputs.name.value), '{log-analytics-resource-id}', if(parameters('enableMonitoring'), reference('log_analytics').outputs.resourceId.value, '')), '{open-ai}', reference('openai').outputs.name.value), '{ai-search}', reference('search').outputs.name.value), '{storage-account}', reference('storage').outputs.name.value)]"
           }
         },
         "template": {
@@ -7525,7 +7572,7 @@
       "metadata": {
         "description": "Computer Vision service information."
       },
-      "value": "[string(createObject('service_name', reference('computerVision').outputs.name.value, 'endpoint', if(parameters('useAdvancedImageProcessing'), reference('computerVision').outputs.endpoint.value, ''), 'location', if(parameters('useAdvancedImageProcessing'), parameters('location'), ''), 'vectorize_image_api_version', parameters('computerVisionVectorizeImageApiVersion'), 'vectorize_image_model_version', parameters('computerVisionVectorizeImageModelVersion')))]"
+      "value": "[string(createObject('service_name', reference('speechService').outputs.name.value, 'endpoint', if(parameters('useAdvancedImageProcessing'), reference('computerVision').outputs.endpoint.value, ''), 'location', if(parameters('useAdvancedImageProcessing'), parameters('location'), ''), 'vectorize_image_api_version', parameters('computerVisionVectorizeImageApiVersion'), 'vectorize_image_model_version', parameters('computerVisionVectorizeImageModelVersion')))]"
     },
     "AZURE_CONTENT_SAFETY_INFO": {
       "type": "string",

@@ -2526,7 +2526,7 @@ module web './modules/compute/app-service.bicep' = {
         AZURE_OPENAI_EMBEDDING_MODEL: azureOpenAIEmbeddingModel
         AZURE_OPENAI_EMBEDDING_MODEL_NAME: azureOpenAIEmbeddingModelName
         AZURE_OPENAI_EMBEDDING_MODEL_VERSION: azureOpenAIEmbeddingModelVersion
-        AZURE_SPEECH_SERVICE_NAME: speechServiceName
+        AZURE_SPEECH_SERVICE_NAME: speechService.outputs.name
         AZURE_SPEECH_SERVICE_REGION: location
         AZURE_SPEECH_RECOGNIZER_LANGUAGES: recognizedLanguages
         AZURE_SPEECH_REGION_ENDPOINT: speechService.outputs.endpoint
@@ -2946,7 +2946,7 @@ var azureBlobStorageInfo = string({
 })
 
 var azureSpeechServiceInfo = string({
-  service_name: speechServiceName
+  service_name: speechService.outputs.name
   service_region: location
   recognizer_languages: recognizedLanguages
 })
@@ -2986,7 +2986,7 @@ var azureComputerVisionInfo = string({
 })
 
 var azureOpenaiConfigurationInfo = string({
-  service_name: speechServiceName
+  service_name: speechService.outputs.name
   stream: azureOpenAIStream
   system_message: azureOpenAISystemMessage
   stop_sequence: azureOpenAIStopSequence
