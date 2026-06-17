@@ -111,12 +111,6 @@ param azureSearchUrlColumn string = 'url'
 @description('Optional. Whether to use Azure Search Integrated Vectorization. If the database type is PostgreSQL, set this to false.')
 param azureSearchUseIntegratedVectorization bool = false
 
-@description('Optional. Name of Azure OpenAI Resource.')
-// NOTE: The OpenAI resource (see `module openai` below) is created with `solutionName: solutionName`,
-// not `solutionSuffix` like the other AI services. Keep this variable aligned with the actual
-// deployed resource name so AZURE_OPENAI_RESOURCE in app settings resolves to a real hostname.
-var azureOpenAIResourceName string = 'oai-${solutionName}'
-
 @description('Optional. Name of Azure OpenAI Resource SKU.')
 param azureOpenAISkuName string = 'S0'
 
@@ -281,9 +275,6 @@ param enableMonitoring bool = false
 
 var blobContainerName = 'documents'
 var queueName = 'doc-processing'
-// Deterministic — derived from the resource group identity so the same value is produced on every
-// (re)deployment. Using newGuid() previously caused the function host key and the admin app's
-// FUNCTION_KEY appsetting to drift apart when only one of the two modules was updated on a redeploy.
 var clientKey = '${uniqueString(subscription().id, resourceGroup().id, 'cwyd-function-host-key')}${guid(resourceGroup().id, 'cwyd-function-host-key')}'
 
 @description('Optional. Image version tag to use.')
@@ -1691,7 +1682,7 @@ var defaultOpenAiDeployments = [
 module openai './modules/ai/ai-services.bicep' = {
   name: take('module.ai-services.${solutionName}', 64)
   params: {
-    solutionName: solutionName
+    solutionName: solutionSuffix
     namePrefix: 'oai'
     location: location
     tags: tags
@@ -1844,7 +1835,7 @@ module web './modules/compute/app-service.bicep' = {
         AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_API_VERSION: computerVisionVectorizeImageApiVersion
         AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_MODEL_VERSION: computerVisionVectorizeImageModelVersion
         AZURE_CONTENT_SAFETY_ENDPOINT: contentsafety.outputs.endpoint
-        AZURE_OPENAI_RESOURCE: azureOpenAIResourceName
+        AZURE_OPENAI_RESOURCE: openai.outputs.name
         AZURE_OPENAI_MODEL: azureOpenAIModel
         AZURE_OPENAI_MODEL_NAME: azureOpenAIModelName
         AZURE_OPENAI_MODEL_VERSION: azureOpenAIModelVersion
@@ -1990,7 +1981,7 @@ module adminweb './modules/compute/app-service.bicep' = {
         AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_API_VERSION: computerVisionVectorizeImageApiVersion
         AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_MODEL_VERSION: computerVisionVectorizeImageModelVersion
         AZURE_CONTENT_SAFETY_ENDPOINT: contentsafety.outputs.endpoint
-        AZURE_OPENAI_RESOURCE: azureOpenAIResourceName
+        AZURE_OPENAI_RESOURCE: openai.outputs.name
         AZURE_OPENAI_MODEL: azureOpenAIModel
         AZURE_OPENAI_MODEL_NAME: azureOpenAIModelName
         AZURE_OPENAI_MODEL_VERSION: azureOpenAIModelVersion
@@ -2044,8 +2035,8 @@ module adminweb './modules/compute/app-service.bicep' = {
                 AZURE_POSTGRESQL_HOST_NAME: postgresDBModule!.outputs.serverFqdn
                 AZURE_POSTGRESQL_DATABASE_NAME: postgresDBName
                 AZURE_POSTGRESQL_USER: managedIdentityModule!.outputs.name
-                MANAGED_IDENTITY_CLIENT_ID: managedIdentityModule.outputs.clientId
-                MANAGED_IDENTITY_RESOURCE_ID: managedIdentityModule.outputs.resourceId
+                MANAGED_IDENTITY_CLIENT_ID: managedIdentityModule!.outputs.clientId
+                MANAGED_IDENTITY_RESOURCE_ID: managedIdentityModule!.outputs.resourceId
               }
             : {}
     )
@@ -2125,7 +2116,7 @@ module function './modules/compute/function-app.bicep' = {
         AZURE_OPENAI_EMBEDDING_MODEL: azureOpenAIEmbeddingModel
         AZURE_OPENAI_EMBEDDING_MODEL_NAME: azureOpenAIEmbeddingModelName
         AZURE_OPENAI_EMBEDDING_MODEL_VERSION: azureOpenAIEmbeddingModelVersion
-        AZURE_OPENAI_RESOURCE: azureOpenAIResourceName
+        AZURE_OPENAI_RESOURCE: openai.outputs.name
         AZURE_OPENAI_API_VERSION: azureOpenAIApiVersion
         USE_ADVANCED_IMAGE_PROCESSING: useAdvancedImageProcessing ? 'true' : 'false'
         DOCUMENT_PROCESSING_QUEUE_NAME: queueName
@@ -2515,7 +2506,7 @@ var azureOpenaiConfigurationInfo = string({
   top_p: azureOpenAITopP
   temperature: azureOpenAITemperature
   api_version: azureOpenAIApiVersion
-  resource: azureOpenAIResourceName
+  resource: openai.outputs.name
 })
 
 var azureContentSafetyInfo = string({
