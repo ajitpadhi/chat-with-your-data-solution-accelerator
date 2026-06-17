@@ -317,7 +317,7 @@ resource resourceGroupTags 'Microsoft.Resources/tags@2025-04-01' = {
 
 // ========== Managed Identity ========== //
 module managedIdentityModule './modules/identity/managed-identity.bicep' = if (databaseType == 'PostgreSQL') {
-  name: 'deploy_managed_identity'
+  name: take('module.managed-identity.user-assigned-identity.${solutionName}', 64)
   params: {
     solutionName: solutionSuffix
     location: location
@@ -1588,7 +1588,7 @@ module applicationInsightsDashboard './modules/monitoring/portal-dashboard.bicep
 }
 
 module cosmosDBModule './modules/data/cosmos-db-nosql.bicep' = if (databaseType == 'CosmosDB') {
-  name: 'deploy_cosmos_db'
+  name: take('module.cosmos-db-nosql.${solutionName}', 64)
   params: {
     solutionName: solutionSuffix
     location: location
@@ -1598,7 +1598,7 @@ module cosmosDBModule './modules/data/cosmos-db-nosql.bicep' = if (databaseType 
 
 var postgresDBName = 'postgres'
 module postgresDBModule './modules/data/postgresql-flexible-server.bicep' = if (databaseType == 'PostgreSQL') {
-  name: 'deploy_postgres_sql'
+  name: take('module.postgre-sql.flexible-server.${solutionName}', 64)
   params: {
     solutionName: solutionSuffix
     location: 'eastus2'
@@ -1634,7 +1634,7 @@ module postgresDBModule './modules/data/postgresql-flexible-server.bicep' = if (
 
 // Store secrets in a keyvault
 module keyvault './modules/security/key-vault.bicep' = {
-  name: 'keyvault'
+  name: take('module.key-vault.${solutionName}', 64)
   params: {
     solutionName: solutionSuffix
     location: location
@@ -1674,7 +1674,7 @@ var defaultOpenAiDeployments = [
 ]
 
 module openai './modules/ai/ai-services.bicep' = {
-  name: azureOpenAIResourceName
+  name: take('module.ai-services.${solutionName}', 64)
   params: {
     solutionName: solutionName
     namePrefix: 'oai'
@@ -1700,7 +1700,7 @@ module model_deployments './modules/ai/ai-foundry-model-deployment.bicep' = [for
 }]
 
 module computerVision './modules/ai/ai-services.bicep' = if (useAdvancedImageProcessing) {
-  name: 'computerVision'
+  name: take('module.ai-services.computerVision.${solutionName}', 64)
   params: {
     solutionName: solutionName
     namePrefix: 'cv'
@@ -1824,7 +1824,7 @@ module web './modules/compute/app-service.bicep' = {
         AZURE_BLOB_ACCOUNT_NAME: storage.outputs.name
         AZURE_BLOB_CONTAINER_NAME: blobContainerName
         AZURE_FORM_RECOGNIZER_ENDPOINT: formrecognizer.outputs.endpoint
-        AZURE_COMPUTER_VISION_ENDPOINT: useAdvancedImageProcessing ? computerVision.outputs.endpoint : ''
+        AZURE_COMPUTER_VISION_ENDPOINT: useAdvancedImageProcessing ? computerVision!.outputs.endpoint : ''
         AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_API_VERSION: computerVisionVectorizeImageApiVersion
         AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_MODEL_VERSION: computerVisionVectorizeImageModelVersion
         AZURE_CONTENT_SAFETY_ENDPOINT: contentsafety.outputs.endpoint
@@ -1966,7 +1966,7 @@ module adminweb './modules/compute/app-service.bicep' = {
         AZURE_BLOB_ACCOUNT_NAME: storage.outputs.name
         AZURE_BLOB_CONTAINER_NAME: blobContainerName
         AZURE_FORM_RECOGNIZER_ENDPOINT: formrecognizer.outputs.endpoint
-        AZURE_COMPUTER_VISION_ENDPOINT: useAdvancedImageProcessing ? computerVision.outputs.endpoint : ''
+        AZURE_COMPUTER_VISION_ENDPOINT: useAdvancedImageProcessing ? computerVision!.outputs.endpoint : ''
         AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_API_VERSION: computerVisionVectorizeImageApiVersion
         AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_MODEL_VERSION: computerVisionVectorizeImageModelVersion
         AZURE_CONTENT_SAFETY_ENDPOINT: contentsafety.outputs.endpoint
@@ -2085,13 +2085,12 @@ module function './modules/compute/function-app.bicep' = if (hostingModel == 'co
     serverFarmResourceId: webServerFarm.outputs.resourceId
     applicationInsightsName: app_insights!.outputs.name
     storageAccountName: storage.outputs.name
-    storageAccountResourceId: storage.outputs.resourceId
     appSettings: union(
       {
         AZURE_BLOB_ACCOUNT_NAME: storage.outputs.name
         AZURE_BLOB_CONTAINER_NAME: blobContainerName
         AZURE_FORM_RECOGNIZER_ENDPOINT: formrecognizer.outputs.endpoint
-        AZURE_COMPUTER_VISION_ENDPOINT: useAdvancedImageProcessing ? computerVision.outputs.endpoint : ''
+        AZURE_COMPUTER_VISION_ENDPOINT: useAdvancedImageProcessing ? computerVision!.outputs.endpoint : ''
         AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_API_VERSION: computerVisionVectorizeImageApiVersion
         AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_MODEL_VERSION: computerVisionVectorizeImageModelVersion
         AZURE_CONTENT_SAFETY_ENDPOINT: contentsafety.outputs.endpoint
@@ -2245,7 +2244,6 @@ module avmEventGridSystemTopic './modules/data/event-grid.bicep' = {
     location: location
     source: storage.outputs.resourceId
     topicType: 'Microsoft.Storage.StorageAccounts'
-    tags: allTags
     eventSubscriptions: [
       {
         name: 'evts-${solutionSuffix}'

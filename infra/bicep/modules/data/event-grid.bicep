@@ -13,9 +13,6 @@ param name string = 'evgt-${solutionName}'
 @description('Azure region for the resource.')
 param location string
 
-@description('Tags to apply to the resource.')
-param tags object = {}
-
 @description('Resource ID of the source that publishes events (e.g., Storage Account resource ID).')
 param source string
 

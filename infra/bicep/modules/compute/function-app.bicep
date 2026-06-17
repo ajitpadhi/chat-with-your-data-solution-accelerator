@@ -16,22 +16,11 @@ param tags object = {}
 @description('Resource ID of the App Service Plan.')
 param serverFarmResourceId string
 
-@description('Resource ID of the storage account for function app.')
-param storageAccountResourceId string
-
 @description('Name of the storage account.')
 param storageAccountName string
 
-@description('Managed identity configuration.')
-param managedIdentities object = {
-  systemAssigned: true
-}
-
 @description('App settings as name-value pairs.')
 param appSettings object = {}
-
-@description('Site configuration object.')
-param siteConfig object = {}
 
 @description('Runtime stack.')
 param runtimeStack string = 'python'
@@ -63,10 +52,6 @@ param numberOfWorkers int = -1
 // ============================================================================
 // Variables
 // ============================================================================
-var identityConfig = empty(managedIdentities) ? null : {
-  type: contains(managedIdentities, 'userAssignedResourceIds') ? (contains(managedIdentities, 'systemAssigned') && managedIdentities.systemAssigned ? 'SystemAssigned,UserAssigned' : 'UserAssigned') : 'SystemAssigned'
-  userAssignedIdentities: contains(managedIdentities, 'userAssignedResourceIds') ? reduce(managedIdentities.userAssignedResourceIds, {}, (cur, id) => union(cur, { '${id}': {} })) : null
-}
 
 var linuxFxVersion = '${toUpper(runtimeStack)}|${runtimeVersion}'
 var useDocker = !empty(dockerFullImageName)

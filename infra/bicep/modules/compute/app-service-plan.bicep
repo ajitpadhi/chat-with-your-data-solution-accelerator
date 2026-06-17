@@ -35,7 +35,7 @@ param zoneRedundant bool = false
 // ============================================================================
 // Resource Deployment
 // ============================================================================
-resource appServicePlan 'Microsoft.Web/serverfarms@2025-05-01' = {
+resource appServicePlan 'Microsoft.Web/serverfarms@2025-03-01' = {
   name: name
   location: location
   tags: tags

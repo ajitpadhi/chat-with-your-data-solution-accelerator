@@ -41,9 +41,6 @@ param sku string = 'S0'
 @description('Custom subdomain name for the account.')
 param customSubDomainName string = ''
 
-@description('Disable local (key-based) authentication.')
-param disableLocalAuth bool = true
-
 @description('Public network access setting.')
 @allowed(['Enabled', 'Disabled'])
 param publicNetworkAccess string = 'Enabled'
