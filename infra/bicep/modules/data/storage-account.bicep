@@ -30,7 +30,7 @@ param accessTier string = 'Hot'
 param allowBlobPublicAccess bool = false
 
 @description('Allow shared key access.')
-param allowSharedKeyAccess bool = true
+param allowSharedKeyAccess bool = false
 
 @description('Blob containers to create.')
 param containers array = [
@@ -42,6 +42,9 @@ param containers array = [
 
 @description('Optional. Storage queue service settings to create queues or diagnostics.')
 param queues array = []
+
+@description('Optional. Delete retention policy for blob service.')
+param deleteRetentionPolicy object = {}
 
 @description('Network ACLs for the storage account.')
 param networkAcls object = {
@@ -64,6 +67,8 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2025-08-01' = {
     accessTier: accessTier
     allowBlobPublicAccess: allowBlobPublicAccess
     allowSharedKeyAccess: allowSharedKeyAccess
+    defaultToOAuthAuthentication: false
+    dnsEndpointType: 'standard'
     minimumTlsVersion: 'TLS1_2'
     supportsHttpsTrafficOnly: true
     networkAcls: networkAcls
@@ -84,7 +89,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2025-08-01' = {
   resource blobServices 'blobServices' = if (!empty(containers)) {
     name: 'default'
     properties: {
-      deleteRetentionPolicy: {}
+      deleteRetentionPolicy: deleteRetentionPolicy
     }
     resource container 'containers' = [
       for container in containers: {

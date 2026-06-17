@@ -31,18 +31,10 @@ param managedIdentities object = {}
 // ============================================================================
 // Resource
 // ============================================================================
+
 resource eventGridSystemTopic 'Microsoft.EventGrid/systemTopics@2025-07-15-preview' = {
   name: name
   location: location
-  tags: tags
-  identity: !empty(managedIdentities) ? {
-    type: (managedIdentities.?systemAssigned ?? false) && !empty(managedIdentities.?userAssignedResourceIds ?? [])
-      ? 'SystemAssigned,UserAssigned'
-      : (managedIdentities.?systemAssigned ?? false) ? 'SystemAssigned' : 'UserAssigned'
-    userAssignedIdentities: !empty(managedIdentities.?userAssignedResourceIds ?? [])
-      ? reduce(managedIdentities.userAssignedResourceIds, {}, (cur, next) => union(cur, { '${next}': {} }))
-      : null
-  } : null
   properties: {
     source: source
     topicType: topicType

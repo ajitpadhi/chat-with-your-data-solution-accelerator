@@ -33,10 +33,6 @@ param softDeleteRetentionInDays int = 90
 @description('Enable purge protection.')
 param enablePurgeProtection bool = true
 
-@description('Public network access setting.')
-@allowed(['Enabled', 'Disabled'])
-param publicNetworkAccess string = 'Enabled'
-
 @description('The Microsoft Entra tenant ID for the Key Vault.')
 param tenantId string = subscription().tenantId
 
@@ -98,10 +94,9 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     enableSoftDelete: enableSoftDelete
     softDeleteRetentionInDays: softDeleteRetentionInDays
     enablePurgeProtection: enablePurgeProtection
-    publicNetworkAccess: publicNetworkAccess
     networkAcls: {
       bypass: 'AzureServices'
-      defaultAction: publicNetworkAccess == 'Disabled' ? 'Deny' : 'Allow'
+      defaultAction: 'Allow'
     }
   }
 }

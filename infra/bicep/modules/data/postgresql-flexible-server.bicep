@@ -52,6 +52,10 @@ resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2026-01-01-pr
     highAvailability: {
       mode: 'Disabled'
     }
+    backup: {
+      backupRetentionDays: 7
+      geoRedundantBackup: 'Disabled'
+    }
     network: {
       publicNetworkAccess: 'Enabled'
     }

@@ -48,12 +48,6 @@ param hostingPlanSku string = 'B3'
 ])
 param databaseType string = 'PostgreSQL'
 
-@description('Azure Cosmos DB Account Name.')
-var azureCosmosDBAccountName string = 'cosmos-${solutionSuffix}'
-
-@description('Azure Postgres DB Account Name.')
-var azurePostgresDBAccountName string = 'psql-${solutionSuffix}'
-
 @description('Name of Web App.')
 var websiteName string = 'app-${solutionSuffix}'
 
@@ -189,12 +183,6 @@ param azureOpenAIEmbeddingModelVersion string = '1'
 @description('Optional. Azure OpenAI Embedding Model Capacity - See here for more info https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/quota .')
 param azureOpenAIEmbeddingModelCapacity int = 100
 
-@description('Optional. Azure Search vector field dimensions. Must match the embedding model dimensions. 1536 for text-embedding-3-small, 3072 for text-embedding-3-large. See https://learn.microsoft.com/en-us/azure/search/cognitive-search-skill-azure-openai-embedding#supported-dimensions-by-modelname.(Only for databaseType=CosmosDB)')
-param azureSearchDimensions string = '1536'
-
-@description('Optional. Name of Computer Vision Resource (if useAdvancedImageProcessing=true).')
-var computerVisionName string = 'cv-${solutionSuffix}'
-
 @description('Optional. Name of Computer Vision Resource SKU (if useAdvancedImageProcessing=true).')
 @allowed([
   'F0'
@@ -282,9 +270,6 @@ param recognizedLanguages string = 'en-US,fr-FR,de-DE,it-IT'
 @description('Optional. The tags to apply to all deployed Azure resources.')
 param tags resourceInput<'Microsoft.Resources/resourceGroups@2025-04-01'>.tags = {}
 
-@description('Optional. Enable purge protection for applicable resources, aligned with the Well Architected Framework recommendations. Defaults to false.')
-param enablePurgeProtection bool = false
-
 @description('Optional. Enable monitoring applicable resources, aligned with the Well Architected Framework recommendations. This setting enables Application Insights and Log Analytics and configures all the resources applicable resources to send logs. Defaults to false.')
 param enableMonitoring bool = false
 
@@ -331,12 +316,12 @@ resource resourceGroupTags 'Microsoft.Resources/tags@2025-04-01' = {
 }
 
 // ========== Managed Identity ========== //
-module managedIdentityModule './modules/identity/managed-identity.bicep' = {
-  name: take('module.managed-identity.${solutionName}', 64)
+module managedIdentityModule './modules/identity/managed-identity.bicep' = if (databaseType == 'PostgreSQL') {
+  name: 'deploy_managed_identity'
   params: {
     solutionName: solutionSuffix
     location: location
-    tags: tags
+    tags: allTags
   }
 }
 
@@ -353,13 +338,6 @@ resource existingLogAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces
 var logAnalyticsWorkspaceResourceId = useExistingLogAnalytics
   ? existingLogAnalyticsWorkspace.id
   : (enableMonitoring ? log_analytics!.outputs.resourceId : '')
-var logAnalyticsWorkspaceName = useExistingLogAnalytics
-  ? split(existingLogAnalyticsWorkspaceId, '/')[8]
-  : (enableMonitoring ? log_analytics!.outputs.name : '')
-
-// WAF: Diagnostic settings helper — reused across modules
-var monitoringDiagnosticSettings = enableMonitoring ? [{ workspaceResourceId: logAnalyticsWorkspaceResourceId }] : []
-
 
 // ========== Log Analytics module ========== //
 module log_analytics './modules/monitoring/log-analytics.bicep' = if (enableMonitoring && !useExistingLogAnalytics) {
@@ -1609,42 +1587,27 @@ module applicationInsightsDashboard './modules/monitoring/portal-dashboard.bicep
   }
 }
 
-// ========== Cosmos DB module ========== //
 module cosmosDBModule './modules/data/cosmos-db-nosql.bicep' = if (databaseType == 'CosmosDB') {
-  name: take('module.cosmos-db-nosql.${solutionName}', 64)
+  name: 'deploy_cosmos_db'
   params: {
     solutionName: solutionSuffix
     location: location
-    tags: tags
-    // dataPlaneRoleDefinitions: [
-    //   {
-    //     roleName: 'Cosmos DB SQL Data Contributor'
-    //     dataActions: [
-    //       'Microsoft.DocumentDB/databaseAccounts/readMetadata'
-    //       'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/*'
-    //       'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/items/*'
-    //     ]
-    //     assignments: [{ principalId: managedIdentityModule.outputs.principalId }]
-    //   }
-    // ]
+    tags: allTags
   }
 }
 
-var postgresResourceName = '${azurePostgresDBAccountName}-postgres'
 var postgresDBName = 'postgres'
 module postgresDBModule './modules/data/postgresql-flexible-server.bicep' = if (databaseType == 'PostgreSQL') {
-  name: take('module.postgre-sql.flexible-server.${solutionName}', 64)
+  name: 'deploy_postgres_sql'
   params: {
     solutionName: solutionSuffix
-    location: location
-    tags: tags
-    version: '16'
+    location: 'eastus2'
     administrators: concat(
-      managedIdentityModule.outputs.principalId != ''
+      managedIdentityModule!.outputs.principalId != ''
         ? [
             {
-              objectId: managedIdentityModule.outputs.principalId
-              principalName: managedIdentityModule.outputs.name
+              objectId: managedIdentityModule!.outputs.principalId
+              principalName: managedIdentityModule!.outputs.name
               principalType: 'ServicePrincipal'
             }
           ]
@@ -1671,18 +1634,14 @@ module postgresDBModule './modules/data/postgresql-flexible-server.bicep' = if (
 
 // Store secrets in a keyvault
 module keyvault './modules/security/key-vault.bicep' = {
-  name: take('module.key-vault.${solutionName}', 64)
+  name: 'keyvault'
   params: {
     solutionName: solutionSuffix
     location: location
     tags: tags
-    enablePurgeProtection: enablePurgeProtection
-    enableRbacAuthorization: true
-    enableSoftDelete: true
-    softDeleteRetentionInDays: 7
     principalId: principal.id
     managedIdentityObjectId: databaseType == 'PostgreSQL'
-      ? managedIdentityModule.outputs.principalId
+      ? managedIdentityModule!.outputs.principalId
       : ''
   }
 }
@@ -1699,7 +1658,6 @@ var defaultOpenAiDeployments = [
       name: 'GlobalStandard'
       capacity: azureOpenAIModelCapacity
     }
-    raiPolicyName: 'Microsoft.Default'
   }
   {
     name: azureOpenAIEmbeddingModel
@@ -1712,20 +1670,18 @@ var defaultOpenAiDeployments = [
       name: 'GlobalStandard'
       capacity: azureOpenAIEmbeddingModelCapacity
     }
-    raiPolicyName: 'Microsoft.Default'
   }
 ]
 
 module openai './modules/ai/ai-services.bicep' = {
-  name: take('module.app-service-backend.${solutionName}', 64)
-  scope: resourceGroup()
+  name: azureOpenAIResourceName
   params: {
-    solutionName: azureOpenAIResourceName
+    solutionName: solutionName
     namePrefix: 'oai'
     location: location
-    tags: allTags
-    kind: 'OpenAI'
+    tags: tags
     sku: azureOpenAISkuName
+    kind: 'OpenAI'
   }
 }
 
@@ -1733,53 +1689,36 @@ module openai './modules/ai/ai-services.bicep' = {
 @batchSize(1)
 module model_deployments './modules/ai/ai-foundry-model-deployment.bicep' = [for (deployment, i) in defaultOpenAiDeployments: {
   name: take('module.model-deployment-${i}.${solutionName}', 64)
-  scope: resourceGroup()
   params: {
     aiServicesAccountName: openai.outputs.name
     deploymentName: deployment.name
     modelName: deployment.model.name
     modelVersion: deployment.model.version
-    raiPolicyName: deployment.raiPolicyName
     skuName: deployment.sku.name
     skuCapacity: deployment.sku.capacity
   }
 }]
 
 module computerVision './modules/ai/ai-services.bicep' = if (useAdvancedImageProcessing) {
-  name: take('module.app-service-computerVision.${solutionName}', 64)
-  scope: resourceGroup()
+  name: 'computerVision'
   params: {
-    solutionName: solutionSuffix
+    solutionName: solutionName
     namePrefix: 'cv'
     kind: 'ComputerVision'
-    location: computerVisionLocation != '' ? computerVisionLocation : 'eastus' // Default to eastus if no location provided
-    tags: allTags
+    location: computerVisionLocation != '' ? computerVisionLocation : location
+    tags: tags
     sku: computerVisionSkuName
-    disableLocalAuth: true
   }
 }
 
-module speechService './modules/ai/ai-services.bicep' = {
-  name: take('module.app-service-speech.${solutionName}', 64)
-  scope: resourceGroup()
-  params: {
-    solutionName: solutionSuffix
-    namePrefix: 'spch'
-    location: location
-    kind: 'SpeechServices'
-    sku: 'S0'
-  }
-}
 
-// Update your formrecognizer module
 module formrecognizer './modules/ai/ai-services.bicep' = {
   name: take('module.app-service-formrecognizer.${solutionName}', 64)
-  scope: resourceGroup()
   params: {
     solutionName: solutionSuffix
     namePrefix: 'di'
     location: location
-    tags: allTags
+    tags: tags
     kind: 'FormRecognizer'
   }
 }
@@ -1791,8 +1730,60 @@ module contentsafety './modules/ai/ai-services.bicep' = {
     solutionName: solutionSuffix
     namePrefix: 'cs'
     location: location
-    tags: allTags
+    tags: tags
     kind: 'ContentSafety'
+  }
+}
+
+// Search Index Data Reader
+module searchIndexRoleOpenai './modules/identity/role-assignments.bicep' = {
+  name: 'search-index-role-openai'
+  params: {
+    principalId: openai.outputs.identityPrincipalId
+    roleDefinitionId: '1407120a-92aa-4202-b7e9-c0e197c71c8f'
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Search Service Contributor
+module searchServiceRoleOpenai './modules/identity/role-assignments.bicep' = {
+  name: 'search-service-role-openai'
+  params: {
+    principalId: openai.outputs.identityPrincipalId
+    roleDefinitionId: '7ca78c08-252a-4471-8644-bb5ff32d4ba0'
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Storage Blob Data Reader
+module blobDataReaderRoleSearch './modules/identity/role-assignments.bicep' = if (databaseType == 'CosmosDB') {
+  name: 'blob-data-reader-role-search'
+  params: {
+    principalId: search!.outputs.identityPrincipalId
+    roleDefinitionId: '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1'
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Cognitive Services OpenAI User
+module openAiRoleSearchService './modules/identity/role-assignments.bicep' = if (databaseType == 'CosmosDB') {
+  name: 'openai-role-searchservice'
+  params: {
+    principalId: search!.outputs.identityPrincipalId
+    roleDefinitionId: '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
+    principalType: 'ServicePrincipal'
+  }
+}
+
+module speechService './modules/ai/ai-services.bicep' = {
+  name: take('module.ai-services.SpeechServices.${solutionName}', 64)
+  params: {
+    solutionName: solutionSuffix
+    namePrefix: 'spch'
+    location: location
+    tags: allTags
+    sku: 'S0'
+    kind: 'SpeechServices'
   }
 }
 
@@ -1803,9 +1794,7 @@ module search './modules/ai/ai-search.bicep' = if (databaseType == 'CosmosDB') {
     location: location
     skuName: azureSearchSku
     semanticSearch: azureSearchUseSemanticSearch ? 'free' : 'disabled'
-    disableLocalAuth: false
   }
-  scope: resourceGroup(resourceGroup().name)
 }
 
 module webServerFarm './modules/compute/app-service-plan.bicep' = {
@@ -1814,84 +1803,31 @@ module webServerFarm './modules/compute/app-service-plan.bicep' = {
     solutionName: solutionSuffix
     location: location
     skuName: hostingPlanSku
-  }
-}
-
-module storage './modules/data/storage-account.bicep' = {
-  name: take('module.data.storage-account.${solutionName}', 64)
-  params: {
-    solutionName: solutionSuffix
-    location: location
-    tags: tags
-    accessTier: 'Hot'
-    skuName: 'Standard_GRS'
-    kind: 'StorageV2'
-    containers: [
-      {
-        name: blobContainerName
-        publicAccess: 'None'
-      }
-      {
-        name: 'config'
-        publicAccess: 'None'
-      }
-    ]
-    queues: [
-      {
-        name: 'doc-processing'
-      }
-      {
-        name: 'doc-processing-poison'
-      }
-    ]
-    // roleAssignments: [
-    //   {
-    //     principalId: managedIdentityModule.outputs.principalId
-    //     roleDefinitionIdOrName: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
-    //     principalType: 'ServicePrincipal'
-    //   }
-    //   {
-    //     principalId: managedIdentityModule.outputs.principalId
-    //     roleDefinitionIdOrName: '974c5e8b-45b9-4653-ba55-5f855dd0fb88' // Storage Queue Data Contributor
-    //     principalType: 'ServicePrincipal'
-    //   }
-    //   {
-    //     principalId: managedIdentityModule.outputs.principalId
-    //     roleDefinitionIdOrName: 'Storage File Data Privileged Contributor'
-    //     principalType: 'ServicePrincipal'
-    //   }
-    // ]
+    skuCapacity: 2
+    reserved: true
   }
 }
 
 var webLinuxFxVersion = hostingModel == 'container'
   ? 'DOCKER|${registryName}.azurecr.io/rag-webapp:${appversion}'
   : 'PYTHON|3.11'
-var adminWebLinuxFxVersion = hostingModel == 'container'
-  ? 'DOCKER|${registryName}.azurecr.io/rag-adminwebapp:${appversion}'
-  : 'PYTHON|3.11'
-
-var postgresDBFqdn = '${postgresResourceName}.postgres.database.azure.com'
 module web './modules/compute/app-service.bicep' = {
   name: take('module.web.site.${websiteName}${hostingModel == 'container' ? '-docker' : ''}', 64)
-  scope: resourceGroup()
   params: {
     solutionName: hostingModel == 'container' ? '${websiteName}-docker' : websiteName
     location: location
-    tags: union(tags, { 'azd-service-name': hostingModel == 'container' ? 'web-docker' : 'web' })
-    kind: hostingModel == 'container' ? 'app,linux,container' : 'app,linux'
-    serverFarmResourceId: webServerFarm.outputs.resourceId
+    tags: union(tags, { 'azd-service-name': 'web' })
     linuxFxVersion: webLinuxFxVersion
+    serverFarmResourceId: webServerFarm.outputs.resourceId
     appSettings: union(
       {
         AZURE_BLOB_ACCOUNT_NAME: storage.outputs.name
         AZURE_BLOB_CONTAINER_NAME: blobContainerName
         AZURE_FORM_RECOGNIZER_ENDPOINT: formrecognizer.outputs.endpoint
-        AZURE_COMPUTER_VISION_ENDPOINT: useAdvancedImageProcessing ? computerVision!.outputs.endpoint : ''
+        AZURE_COMPUTER_VISION_ENDPOINT: useAdvancedImageProcessing ? computerVision.outputs.endpoint : ''
         AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_API_VERSION: computerVisionVectorizeImageApiVersion
         AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_MODEL_VERSION: computerVisionVectorizeImageModelVersion
         AZURE_CONTENT_SAFETY_ENDPOINT: contentsafety.outputs.endpoint
-        AZURE_KEY_VAULT_ENDPOINT: keyvault.outputs.uri
         AZURE_OPENAI_RESOURCE: azureOpenAIResourceName
         AZURE_OPENAI_MODEL: azureOpenAIModel
         AZURE_OPENAI_MODEL_NAME: azureOpenAIModelName
@@ -1906,32 +1842,27 @@ module web './modules/compute/app-service.bicep' = {
         AZURE_OPENAI_EMBEDDING_MODEL: azureOpenAIEmbeddingModel
         AZURE_OPENAI_EMBEDDING_MODEL_NAME: azureOpenAIEmbeddingModelName
         AZURE_OPENAI_EMBEDDING_MODEL_VERSION: azureOpenAIEmbeddingModelVersion
+
         AZURE_SPEECH_SERVICE_NAME: speechService.outputs.name
         AZURE_SPEECH_SERVICE_REGION: location
         AZURE_SPEECH_RECOGNIZER_LANGUAGES: recognizedLanguages
-        AZURE_SPEECH_REGION_ENDPOINT: speechService.outputs.endpoint
-        USE_ADVANCED_IMAGE_PROCESSING: useAdvancedImageProcessing ? 'true' : 'false'
-        ADVANCED_IMAGE_PROCESSING_MAX_IMAGES: string(advancedImageProcessingMaxImages)
+        USE_ADVANCED_IMAGE_PROCESSING: useAdvancedImageProcessing
+        ADVANCED_IMAGE_PROCESSING_MAX_IMAGES: advancedImageProcessingMaxImages
         ORCHESTRATION_STRATEGY: orchestrationStrategy
         CONVERSATION_FLOW: conversationFlow
         LOGLEVEL: logLevel
-        PACKAGE_LOGGING_LEVEL: 'WARNING'
-        AZURE_LOGGING_PACKAGES: ''
         DATABASE_TYPE: databaseType
-        MANAGED_IDENTITY_CLIENT_ID: managedIdentityModule.outputs.clientId
-        MANAGED_IDENTITY_RESOURCE_ID: managedIdentityModule.outputs.resourceId
-        AZURE_CLIENT_ID: managedIdentityModule.outputs.clientId // Required so LangChain AzureSearch vector store authenticates with this user-assigned managed identity
-        APP_ENV: appEnvironment
-        AZURE_SEARCH_DIMENSIONS: azureSearchDimensions
-        APPLICATIONINSIGHTS_ENABLED: enableMonitoring ? 'true' : 'false'
+        OPEN_AI_FUNCTIONS_SYSTEM_PROMPT: openAISystemPrompts.OPEN_AI_FUNCTIONS_SYSTEM_PROMPT
+        SEMENTIC_KERNEL_SYSTEM_PROMPT: openAISystemPrompts.SEMANTIC_KERNEL_SYSTEM_PROMPT
       },
+      // Conditionally add database-specific settings
       databaseType == 'CosmosDB'
         ? {
-            AZURE_COSMOSDB_ACCOUNT_NAME: azureCosmosDBAccountName
+            AZURE_COSMOSDB_ACCOUNT_NAME: cosmosDBModule!.outputs.name
             AZURE_COSMOSDB_DATABASE_NAME: cosmosDBModule!.outputs.databaseName
             AZURE_COSMOSDB_CONVERSATIONS_CONTAINER_NAME: cosmosDBModule!.outputs.containerName
-            AZURE_COSMOSDB_ENABLE_FEEDBACK: 'true'
-            AZURE_SEARCH_USE_SEMANTIC_SEARCH: azureSearchUseSemanticSearch ? 'true' : 'false'
+            AZURE_COSMOSDB_ENABLE_FEEDBACK: true
+            AZURE_SEARCH_USE_SEMANTIC_SEARCH: azureSearchUseSemanticSearch
             AZURE_SEARCH_SERVICE: 'https://${azureAISearchName}.search.windows.net'
             AZURE_SEARCH_INDEX: azureSearchIndex
             AZURE_SEARCH_CONVERSATIONS_LOG_INDEX: azureSearchConversationLogIndex
@@ -1947,44 +1878,98 @@ module web './modules/compute/app-service.bicep' = {
             AZURE_SEARCH_TITLE_COLUMN: azureSearchTitleColumn
             AZURE_SEARCH_FIELDS_METADATA: azureSearchFieldsMetadata
             AZURE_SEARCH_SOURCE_COLUMN: azureSearchSourceColumn
-            AZURE_SEARCH_TEXT_COLUMN: azureSearchUseIntegratedVectorization ? azureSearchTextColumn : ''
-            AZURE_SEARCH_LAYOUT_TEXT_COLUMN: azureSearchUseIntegratedVectorization ? azureSearchLayoutTextColumn : ''
             AZURE_SEARCH_CHUNK_COLUMN: azureSearchChunkColumn
             AZURE_SEARCH_OFFSET_COLUMN: azureSearchOffsetColumn
             AZURE_SEARCH_URL_COLUMN: azureSearchUrlColumn
-            AZURE_SEARCH_USE_INTEGRATED_VECTORIZATION: azureSearchUseIntegratedVectorization ? 'true' : 'false'
+            AZURE_SEARCH_USE_INTEGRATED_VECTORIZATION: azureSearchUseIntegratedVectorization
           }
         : databaseType == 'PostgreSQL'
             ? {
-                AZURE_POSTGRESQL_HOST_NAME: postgresDBFqdn
+                AZURE_POSTGRESQL_HOST_NAME: postgresDBModule!.outputs.serverFqdn
                 AZURE_POSTGRESQL_DATABASE_NAME: postgresDBName
-                AZURE_POSTGRESQL_USER: managedIdentityModule.outputs.name
+                AZURE_POSTGRESQL_USER: managedIdentityModule!.outputs.name
               }
             : {}
     )
   }
 }
 
+// Storage Blob Data Contributor
+module storageBlobRoleWeb './modules/identity/role-assignments.bicep' = {
+  name: 'storage-blob-role-web'
+  params: {
+    principalId: web.outputs.identityPrincipalId
+    roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Cognitive Services User
+module openAIRoleWeb './modules/identity/role-assignments.bicep' = {
+  name: 'openai-role-web'
+  params: {
+    principalId: web.outputs.identityPrincipalId
+    roleDefinitionId: 'a97b65f3-24c7-4388-baec-2e87135dc908'
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Contributor
+module openAIRoleWebContributor './modules/identity/role-assignments.bicep' = {
+  name: 'openai-role-web-contributor'
+  params: {
+    principalId: web.outputs.identityPrincipalId
+    roleDefinitionId: 'b24988ac-6180-42a0-ab88-20f7382dd24c'
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Search Index Data Contributor
+module searchRoleWeb './modules/identity/role-assignments.bicep' = {
+  name: 'search-role-web'
+  params: {
+    principalId: web.outputs.identityPrincipalId
+    roleDefinitionId: '8ebe5a00-799e-43f5-93ac-243d3dce84a7'
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// resource cosmosRoleDefinition 'Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions@2024-05-15' existing = {
+//   name: '${cosmosDBModule!.outputs.name}/00000000-0000-0000-0000-000000000002'
+// }
+
+// module cosmosUserRole './modules/identity/role-assignments.bicep' = if (databaseType == 'CosmosDB') {
+//   name: 'cosmos-sql-user-role-${web.name}'
+//   params: {
+//     principalType: 'ServicePrincipal'
+//     roleDefinitionId: cosmosRoleDefinition.id
+//     principalId: web.outputs.identityPrincipalId
+//   }
+//   dependsOn: [
+//     cosmosRoleDefinition
+//   ]
+// }
+
+var adminWebLinuxFxVersion = hostingModel == 'container'
+  ? 'DOCKER|${registryName}.azurecr.io/rag-adminwebapp:${appversion}'
+  : 'PYTHON|3.11'
 module adminweb './modules/compute/app-service.bicep' = {
   name: take('module.web.site.${adminWebsiteName}${hostingModel == 'container' ? '-docker' : ''}', 64)
-  scope: resourceGroup()
   params: {
     solutionName: hostingModel == 'container' ? '${adminWebsiteName}-docker' : adminWebsiteName
     location: location
     tags: union(tags, { 'azd-service-name': hostingModel == 'container' ? 'adminweb-docker' : 'adminweb' })
-    kind: hostingModel == 'container' ? 'app,linux,container' : 'app,linux'
-    serverFarmResourceId: webServerFarm.outputs.resourceId
     linuxFxVersion: adminWebLinuxFxVersion
+    serverFarmResourceId: webServerFarm.outputs.resourceId
     appSettings: union(
       {
         AZURE_BLOB_ACCOUNT_NAME: storage.outputs.name
         AZURE_BLOB_CONTAINER_NAME: blobContainerName
         AZURE_FORM_RECOGNIZER_ENDPOINT: formrecognizer.outputs.endpoint
-        AZURE_COMPUTER_VISION_ENDPOINT: useAdvancedImageProcessing ? computerVision!.outputs.endpoint : ''
+        AZURE_COMPUTER_VISION_ENDPOINT: useAdvancedImageProcessing ? computerVision.outputs.endpoint : ''
         AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_API_VERSION: computerVisionVectorizeImageApiVersion
         AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_MODEL_VERSION: computerVisionVectorizeImageModelVersion
         AZURE_CONTENT_SAFETY_ENDPOINT: contentsafety.outputs.endpoint
-        AZURE_KEY_VAULT_ENDPOINT: keyvault.outputs.uri
         AZURE_OPENAI_RESOURCE: azureOpenAIResourceName
         AZURE_OPENAI_MODEL: azureOpenAIModel
         AZURE_OPENAI_MODEL_NAME: azureOpenAIModelName
@@ -2000,28 +1985,21 @@ module adminweb './modules/compute/app-service.bicep' = {
         AZURE_OPENAI_EMBEDDING_MODEL_NAME: azureOpenAIEmbeddingModelName
         AZURE_OPENAI_EMBEDDING_MODEL_VERSION: azureOpenAIEmbeddingModelVersion
 
-        USE_ADVANCED_IMAGE_PROCESSING: useAdvancedImageProcessing ? 'true' : 'false'
-        BACKEND_URL: 'https://${hostingModel == 'container' ? '${functionName}-docker' : functionName}.azurewebsites.net'
+        USE_ADVANCED_IMAGE_PROCESSING: useAdvancedImageProcessing
+        BACKEND_URL: 'https://${functionName}.azurewebsites.net'
         DOCUMENT_PROCESSING_QUEUE_NAME: queueName
-        FUNCTION_KEY: 'FUNCTION-KEY'
+        FUNCTION_KEY: clientKey
         ORCHESTRATION_STRATEGY: orchestrationStrategy
         CONVERSATION_FLOW: conversationFlow
         LOGLEVEL: logLevel
-        PACKAGE_LOGGING_LEVEL: 'WARNING'
-        AZURE_LOGGING_PACKAGES: ''
         DATABASE_TYPE: databaseType
-        USE_KEY_VAULT: 'true'
-        MANAGED_IDENTITY_CLIENT_ID: managedIdentityModule.outputs.clientId
-        MANAGED_IDENTITY_RESOURCE_ID: managedIdentityModule.outputs.resourceId
-        APP_ENV: appEnvironment
-        AZURE_SEARCH_DIMENSIONS: azureSearchDimensions
-        APPLICATIONINSIGHTS_ENABLED: enableMonitoring ? 'true' : 'false'
       },
+      // Conditionally add database-specific settings
       databaseType == 'CosmosDB'
         ? {
             AZURE_SEARCH_SERVICE: 'https://${azureAISearchName}.search.windows.net'
             AZURE_SEARCH_INDEX: azureSearchIndex
-            AZURE_SEARCH_USE_SEMANTIC_SEARCH: azureSearchUseSemanticSearch ? 'true' : 'false'
+            AZURE_SEARCH_USE_SEMANTIC_SEARCH: azureSearchUseSemanticSearch
             AZURE_SEARCH_SEMANTIC_SEARCH_CONFIG: azureSearchSemanticSearchConfig
             AZURE_SEARCH_INDEX_IS_PRECHUNKED: azureSearchIndexIsPrechunked
             AZURE_SEARCH_TOP_K: azureSearchTopK
@@ -2034,48 +2012,89 @@ module adminweb './modules/compute/app-service.bicep' = {
             AZURE_SEARCH_TITLE_COLUMN: azureSearchTitleColumn
             AZURE_SEARCH_FIELDS_METADATA: azureSearchFieldsMetadata
             AZURE_SEARCH_SOURCE_COLUMN: azureSearchSourceColumn
-            AZURE_SEARCH_TEXT_COLUMN: azureSearchUseIntegratedVectorization ? azureSearchTextColumn : ''
-            AZURE_SEARCH_LAYOUT_TEXT_COLUMN: azureSearchUseIntegratedVectorization ? azureSearchLayoutTextColumn : ''
             AZURE_SEARCH_CHUNK_COLUMN: azureSearchChunkColumn
             AZURE_SEARCH_OFFSET_COLUMN: azureSearchOffsetColumn
             AZURE_SEARCH_URL_COLUMN: azureSearchUrlColumn
             AZURE_SEARCH_DATASOURCE_NAME: azureSearchDatasource
             AZURE_SEARCH_INDEXER_NAME: azureSearchIndexer
-            AZURE_SEARCH_USE_INTEGRATED_VECTORIZATION: azureSearchUseIntegratedVectorization ? 'true' : 'false'
+            AZURE_SEARCH_USE_INTEGRATED_VECTORIZATION: azureSearchUseIntegratedVectorization
           }
         : databaseType == 'PostgreSQL'
             ? {
-                AZURE_POSTGRESQL_HOST_NAME: postgresDBFqdn
+                AZURE_POSTGRESQL_HOST_NAME: postgresDBModule!.outputs.serverFqdn
                 AZURE_POSTGRESQL_DATABASE_NAME: postgresDBName
-                AZURE_POSTGRESQL_USER: managedIdentityModule.outputs.name
+                AZURE_POSTGRESQL_USER: adminWebsiteName
               }
             : {}
     )
   }
 }
 
-module function './modules/compute/function-app.bicep' = {
-  name: hostingModel == 'container' ? '${functionName}-docker' : functionName
-  scope: resourceGroup()
+// Storage Blob Data Contributor
+module storageRoleBackend './modules/identity/role-assignments.bicep' = {
+  name: 'storage-role-backend'
   params: {
-    name: hostingModel == 'container' ? '${functionName}-docker' : functionName
+    principalId: adminweb.outputs.identityPrincipalId
+    roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Cognitive Services User
+module openAIRoleBackend './modules/identity/role-assignments.bicep' = {
+  name: 'openai-role-backend'
+  params: {
+    principalId: adminweb.outputs.identityPrincipalId
+    roleDefinitionId: 'a97b65f3-24c7-4388-baec-2e87135dc908'
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Contributor
+// This role is used to grant the service principal contributor access to the resource group
+// See if this is needed in the future.
+module openAIRoleBackendContributor './modules/identity/role-assignments.bicep' = {
+  name: 'openai-role-backend-contributor'
+  params: {
+    principalId: adminweb.outputs.identityPrincipalId
+    roleDefinitionId: 'b24988ac-6180-42a0-ab88-20f7382dd24c'
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Search Index Data Contributor
+module searchRoleBackend './modules/identity/role-assignments.bicep' = {
+  name: 'search-role-backend'
+  params: {
+    principalId: adminweb.outputs.identityPrincipalId
+    roleDefinitionId: '8ebe5a00-799e-43f5-93ac-243d3dce84a7'
+    principalType: 'ServicePrincipal'
+  }
+}
+
+module function './modules/compute/function-app.bicep' = if (hostingModel == 'code') {
+  name: hostingModel == 'container' ? '${functionName}-docker' : functionName
+  params: {
+    name: functionName
     location: location
-    tags: union(tags, { 'azd-service-name': hostingModel == 'container' ? 'function-docker' : 'function' })
+    tags: union(tags, { 'azd-service-name': 'function' })
+    kind: hostingModel == 'container' ? 'functionapp,linux,container' : 'functionapp,linux'
     runtimeStack: 'python'
     runtimeVersion: '3.11'
     dockerFullImageName: hostingModel == 'container' ? '${registryName}.azurecr.io/rag-backend:${appversion}' : ''
     serverFarmResourceId: webServerFarm.outputs.resourceId
+    applicationInsightsName: app_insights!.outputs.name
     storageAccountName: storage.outputs.name
+    storageAccountResourceId: storage.outputs.resourceId
     appSettings: union(
       {
         AZURE_BLOB_ACCOUNT_NAME: storage.outputs.name
         AZURE_BLOB_CONTAINER_NAME: blobContainerName
         AZURE_FORM_RECOGNIZER_ENDPOINT: formrecognizer.outputs.endpoint
-        AZURE_COMPUTER_VISION_ENDPOINT: useAdvancedImageProcessing ? computerVision!.outputs.endpoint : ''
+        AZURE_COMPUTER_VISION_ENDPOINT: useAdvancedImageProcessing ? computerVision.outputs.endpoint : ''
         AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_API_VERSION: computerVisionVectorizeImageApiVersion
         AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_MODEL_VERSION: computerVisionVectorizeImageModelVersion
         AZURE_CONTENT_SAFETY_ENDPOINT: contentsafety.outputs.endpoint
-        AZURE_KEY_VAULT_ENDPOINT: keyvault.outputs.uri
         AZURE_OPENAI_MODEL: azureOpenAIModel
         AZURE_OPENAI_MODEL_NAME: azureOpenAIModelName
         AZURE_OPENAI_MODEL_VERSION: azureOpenAIModelVersion
@@ -2084,50 +2103,91 @@ module function './modules/compute/function-app.bicep' = {
         AZURE_OPENAI_EMBEDDING_MODEL_VERSION: azureOpenAIEmbeddingModelVersion
         AZURE_OPENAI_RESOURCE: azureOpenAIResourceName
         AZURE_OPENAI_API_VERSION: azureOpenAIApiVersion
-
-        USE_ADVANCED_IMAGE_PROCESSING: useAdvancedImageProcessing ? 'true' : 'false'
+        USE_ADVANCED_IMAGE_PROCESSING: useAdvancedImageProcessing
         DOCUMENT_PROCESSING_QUEUE_NAME: queueName
         ORCHESTRATION_STRATEGY: orchestrationStrategy
         LOGLEVEL: logLevel
-        PACKAGE_LOGGING_LEVEL: 'WARNING'
-        AZURE_LOGGING_PACKAGES: ''
         AZURE_OPENAI_SYSTEM_MESSAGE: azureOpenAISystemMessage
         DATABASE_TYPE: databaseType
-        MANAGED_IDENTITY_CLIENT_ID: managedIdentityModule.outputs.clientId
-        MANAGED_IDENTITY_RESOURCE_ID: managedIdentityModule.outputs.resourceId
-        AZURE_CLIENT_ID: managedIdentityModule.outputs.clientId // Required so LangChain AzureSearch vector store authenticates with this user-assigned managed identity
-        APP_ENV: appEnvironment
-        BACKEND_URL: backendUrl
-        AZURE_SEARCH_DIMENSIONS: azureSearchDimensions
-        APPLICATIONINSIGHTS_ENABLED: enableMonitoring ? 'true' : 'false'
       },
+      // Conditionally add database-specific settings
       databaseType == 'CosmosDB'
         ? {
             AZURE_SEARCH_INDEX: azureSearchIndex
             AZURE_SEARCH_SERVICE: 'https://${azureAISearchName}.search.windows.net'
             AZURE_SEARCH_DATASOURCE_NAME: azureSearchDatasource
             AZURE_SEARCH_INDEXER_NAME: azureSearchIndexer
-            AZURE_SEARCH_USE_INTEGRATED_VECTORIZATION: azureSearchUseIntegratedVectorization ? 'true' : 'false'
+            AZURE_SEARCH_USE_INTEGRATED_VECTORIZATION: azureSearchUseIntegratedVectorization
             AZURE_SEARCH_FIELDS_ID: azureSearchFieldId
             AZURE_SEARCH_CONTENT_COLUMN: azureSearchContentColumn
             AZURE_SEARCH_CONTENT_VECTOR_COLUMN: azureSearchVectorColumn
             AZURE_SEARCH_TITLE_COLUMN: azureSearchTitleColumn
             AZURE_SEARCH_FIELDS_METADATA: azureSearchFieldsMetadata
             AZURE_SEARCH_SOURCE_COLUMN: azureSearchSourceColumn
-            AZURE_SEARCH_TEXT_COLUMN: azureSearchUseIntegratedVectorization ? azureSearchTextColumn : ''
-            AZURE_SEARCH_LAYOUT_TEXT_COLUMN: azureSearchUseIntegratedVectorization ? azureSearchLayoutTextColumn : ''
             AZURE_SEARCH_CHUNK_COLUMN: azureSearchChunkColumn
             AZURE_SEARCH_OFFSET_COLUMN: azureSearchOffsetColumn
             AZURE_SEARCH_TOP_K: azureSearchTopK
           }
         : databaseType == 'PostgreSQL'
             ? {
-                AZURE_POSTGRESQL_HOST_NAME: postgresDBFqdn
+                AZURE_POSTGRESQL_HOST_NAME: postgresDBModule!.outputs.serverFqdn
                 AZURE_POSTGRESQL_DATABASE_NAME: postgresDBName
-                AZURE_POSTGRESQL_USER: managedIdentityModule.outputs.name
+                AZURE_POSTGRESQL_USER: managedIdentityModule!.outputs.name
               }
             : {}
     )
+  }
+}
+
+// Cognitive Services User
+module openAIRoleFunction './modules/identity/role-assignments.bicep' = {
+  name: 'openai-role-function'
+  params: {
+    principalId: function!.outputs.principalId
+    roleDefinitionId: 'a97b65f3-24c7-4388-baec-2e87135dc908'
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Contributor
+// This role is used to grant the service principal contributor access to the resource group
+// See if this is needed in the future.
+module openAIRoleFunctionContributor './modules/identity/role-assignments.bicep' = {
+  name: 'openai-role-function-contributor'
+  params: {
+    principalId: function!.outputs.principalId
+    roleDefinitionId: 'b24988ac-6180-42a0-ab88-20f7382dd24c'
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Search Index Data Contributor
+module searchRoleFunction './modules/identity/role-assignments.bicep' = {
+  name: 'search-role-function'
+  params: {
+    principalId: function!.outputs.principalId
+    roleDefinitionId: '8ebe5a00-799e-43f5-93ac-243d3dce84a7'
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Storage Blob Data Contributor
+module storageBlobRoleFunction './modules/identity/role-assignments.bicep' = {
+  name: 'storage-blob-role-function'
+  params: {
+    principalId: function!.outputs.principalId
+    roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Storage Queue Data Contributor
+module storageQueueRoleFunction './modules/identity/role-assignments.bicep' = {
+  name: 'storage-queue-role-function'
+  params: {
+    principalId: function!.outputs.principalId
+    roleDefinitionId: '974c5e8b-45b9-4653-ba55-5f855dd0fb88'
+    principalType: 'ServicePrincipal'
   }
 }
 
@@ -2138,17 +2198,17 @@ var wookbookContentsAppServicePlanReplaced = replace(wookbookContentsRGReplaced,
 var wookbookContentsBackendAppServiceReplaced = replace(
   wookbookContentsAppServicePlanReplaced,
   '{backend-app-service}',
-  functionName
+  function!.outputs.name
 )
 var wookbookContentsWebAppServiceReplaced = replace(
   wookbookContentsBackendAppServiceReplaced,
   '{web-app-service}',
-  websiteName
+  web.outputs.name
 )
 var wookbookContentsAdminAppServiceReplaced = replace(
   wookbookContentsWebAppServiceReplaced,
   '{admin-app-service}',
-  adminWebsiteName
+  adminweb.outputs.name
 )
 var wookbookContentsEventGridReplaced = replace(
   wookbookContentsAdminAppServiceReplaced,
@@ -2160,14 +2220,14 @@ var wookbookContentsLogAnalyticsReplaced = replace(
   '{log-analytics-resource-id}',
   log_analytics!.outputs.resourceId
 )
-var wookbookContentsOpenAIReplaced = replace(wookbookContentsLogAnalyticsReplaced, '{open-ai}', azureOpenAIResourceName)
-var wookbookContentsAISearchReplaced = replace(wookbookContentsOpenAIReplaced, '{ai-search}', azureAISearchName)
+var wookbookContentsOpenAIReplaced = replace(wookbookContentsLogAnalyticsReplaced, '{open-ai}', openai.outputs.name)
+var wookbookContentsAISearchReplaced = replace(wookbookContentsOpenAIReplaced, '{ai-search}', search!.outputs.name)
 var wookbookContentsStorageAccountReplaced = replace(
   wookbookContentsAISearchReplaced,
   '{storage-account}',
   storage.outputs.name
 )
-module workbook './modules/monitoring/workbook.bicep' = if (enableMonitoring) {
+module workbook './modules/monitoring/workbook.bicep' = {
   name: take('module.monitoring.workbook.${solutionName}', 64)
   scope: resourceGroup()
   params: {
@@ -2179,12 +2239,12 @@ module workbook './modules/monitoring/workbook.bicep' = if (enableMonitoring) {
 }
 
 module avmEventGridSystemTopic './modules/data/event-grid.bicep' = {
-  name: take('module.data.event-grid.${solutionName}', 64)
+  name: take('module.app-service-eventgrid.${solutionName}', 64)
   params: {
     solutionName: solutionSuffix
+    location: location
     source: storage.outputs.resourceId
     topicType: 'Microsoft.Storage.StorageAccounts'
-    location: location
     tags: allTags
     eventSubscriptions: [
       {
@@ -2215,42 +2275,79 @@ module avmEventGridSystemTopic './modules/data/event-grid.bicep' = {
   }
 }
 
-var systemAssignedRoleAssignments = union(
-  databaseType == 'CosmosDB'
-    ? [
-        {
-          principalId: search.?outputs.identityPrincipalId
-          resourceId: storage.outputs.resourceId
-          roleName: 'Storage Blob Data Contributor'
-          roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
-          principalType: 'ServicePrincipal'
+module storage './modules/data/storage-account.bicep' = {
+  name: take('module.storage-account.${solutionName}', 64)
+  params: {
+    solutionName: solutionSuffix
+    location: location
+    skuName: 'Standard_GRS'
+    deleteRetentionPolicy: azureSearchUseIntegratedVectorization
+      ? {
+          enabled: true
+          days: 7
         }
-        {
-          principalId: search.?outputs.identityPrincipalId
-          resourceId: openai.outputs.resourceId
-          roleName: 'Cognitive Services User'
-          roleDefinitionId: 'a97b65f3-24c7-4388-baec-2e87135dc908'
-          principalType: 'ServicePrincipal'
-        }
-        {
-          principalId: search.?outputs.identityPrincipalId
-          resourceId: openai.outputs.resourceId
-          roleName: 'Cognitive Services OpenAI User'
-          roleDefinitionId: '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
-          principalType: 'ServicePrincipal'
-        }
-      ]
-    : [],
-  [
-    {
-      principalId: formrecognizer.outputs.identityPrincipalId
-      resourceId: storage.outputs.resourceId
-      roleName: 'Storage Blob Data Contributor'
-      roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
-      principalType: 'ServicePrincipal'
-    }
-  ]
-)
+      : {}
+    containers: [
+      {
+        name: blobContainerName
+        publicAccess: 'None'
+      }
+      {
+        name: 'config'
+        publicAccess: 'None'
+      }
+    ]
+    queues: [
+      {
+        name: 'doc-processing'
+      }
+      {
+        name: 'doc-processing-poison'
+      }
+    ]
+  }
+}
+
+// USER ROLES
+// Storage Blob Data Contributor
+module storageRoleUser './modules/identity/role-assignments.bicep' = if (principal.id != '') {
+  name: 'storage-role-user'
+  params: {
+    principalId: principal.id
+    roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
+    principalType: 'User'
+  }
+}
+
+// Cognitive Services User
+module openaiRoleUser './modules/identity/role-assignments.bicep' = if (principal.id != '') {
+  name: 'openai-role-user'
+  params: {
+    principalId: principal.id
+    roleDefinitionId: 'a97b65f3-24c7-4388-baec-2e87135dc908'
+    principalType: 'User'
+  }
+}
+
+// Contributor
+module openaiRoleUserContributor './modules/identity/role-assignments.bicep' = if (principal.id != '') {
+  name: 'openai-role-user-contributor'
+  params: {
+    principalId: principal.id
+    roleDefinitionId: 'b24988ac-6180-42a0-ab88-20f7382dd24c'
+    principalType: 'User'
+  }
+}
+
+// Search Index Data Contributor
+module searchRoleUser './modules/identity/role-assignments.bicep' = if (principal.id != '' && databaseType == 'CosmosDB') {
+  name: 'search-role-user'
+  params: {
+    principalId: principal.id
+    roleDefinitionId: '8ebe5a00-799e-43f5-93ac-243d3dce84a7'
+    principalType: 'User'
+  }
+}
 
 var azureOpenAIModelInfo = string({
   model: azureOpenAIModel
@@ -2265,14 +2362,14 @@ var azureOpenAIEmbeddingModelInfo = string({
 })
 
 var azureCosmosDBInfo = string({
-  account_name: databaseType == 'CosmosDB' ? azureCosmosDBAccountName : ''
+  account_name: databaseType == 'CosmosDB' ? cosmosDBModule!.outputs.name : ''
   database_name: databaseType == 'CosmosDB' ? cosmosDBModule!.outputs.databaseName : ''
   conversations_container_name: databaseType == 'CosmosDB' ? cosmosDBModule!.outputs.containerName : ''
 })
 
 var azurePostgresDBInfo = string({
   host_name: databaseType == 'PostgreSQL' ? postgresDBModule!.outputs.serverFqdn : ''
-  database_name: databaseType == 'PostgreSQL' ? postgresDBName : ''
+  database_name: databaseType == 'PostgreSQL' ? 'postgres' : ''
   user: ''
 })
 
@@ -2414,7 +2511,7 @@ output SERVICE_WEB_RESOURCE_NAME string = web.outputs.name
 output SERVICE_ADMINWEB_RESOURCE_NAME string = adminweb.outputs.name
 
 @description('Function app resource name (for azd deploy).')
-output SERVICE_FUNCTION_RESOURCE_NAME string = function.outputs.name
+output SERVICE_FUNCTION_RESOURCE_NAME string = function!.outputs.name
 
 @description('Frontend web application URI.')
 output FRONTEND_WEBSITE_NAME string = web.outputs.appUrl

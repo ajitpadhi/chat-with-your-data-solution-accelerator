@@ -67,7 +67,10 @@ resource aiService 'Microsoft.CognitiveServices/accounts@2025-12-01' = {
   properties: {
     customSubDomainName: effectiveSubDomain
     publicNetworkAccess: publicNetworkAccess
-    disableLocalAuth: disableLocalAuth
+    // disableLocalAuth: disableLocalAuth
+    networkAcls: {
+      defaultAction: 'Allow'
+    }
   }
 }
 

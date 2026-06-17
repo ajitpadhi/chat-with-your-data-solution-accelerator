@@ -37,10 +37,22 @@ param virtualNetworkSubnetId string = ''
 @description('Public network access setting.')
 param publicNetworkAccess string = 'Enabled'
 
+@description('Number of workers (instances) to allocate. Set to -1 to use default.')
+param functionAppScaleLimit int = -1
+
+@description('Number of workers (instances) to allocate. Set to -1 to use default.')
+param minimumElasticInstanceCount int = -1
+
+@description('Custom application command line (for Linux apps).')
+param appCommandLine string = ''
+
+@description('Number of workers (instances) to allocate. Set to -1 to use default.')
+param numberOfWorkers int = -1
+
 // ============================================================================
 // Resource Deployment
 // ============================================================================
-resource appService 'Microsoft.Web/sites@2025-05-01' = {
+resource appService 'Microsoft.Web/sites@2025-03-01' = {
   name: name
   location: location
   tags: tags
@@ -56,7 +68,19 @@ resource appService 'Microsoft.Web/sites@2025-05-01' = {
       alwaysOn: alwaysOn
       ftpsState: 'Disabled'
       linuxFxVersion: linuxFxVersion
+      minTlsVersion: '1.2'
+      appCommandLine: appCommandLine
+      numberOfWorkers: numberOfWorkers != -1 ? numberOfWorkers : null
+      minimumElasticInstanceCount: minimumElasticInstanceCount != -1 ? minimumElasticInstanceCount : null
+      use32BitWorkerProcess: false
+      functionAppScaleLimit: functionAppScaleLimit != -1 ? functionAppScaleLimit : null
+      healthCheckPath: '/api/health'
+      cors: {
+        allowedOrigins: ['https://portal.azure.com', 'https://ms.portal.azure.com']
+      }
     }
+    clientAffinityEnabled: false
+    httpsOnly: true
     endToEndEncryptionEnabled: true
   }
 
@@ -74,13 +98,13 @@ resource appService 'Microsoft.Web/sites@2025-05-01' = {
   }
 }
 
-resource configAppSettings 'Microsoft.Web/sites/config@2025-05-01' = {
+resource configAppSettings 'Microsoft.Web/sites/config@2025-03-01' = {
   name: 'appsettings'
   parent: appService
   properties: appSettings
 }
 
-resource configLogs 'Microsoft.Web/sites/config@2025-05-01' = {
+resource configLogs 'Microsoft.Web/sites/config@2025-03-01' = {
   name: 'logs'
   parent: appService
   properties: {

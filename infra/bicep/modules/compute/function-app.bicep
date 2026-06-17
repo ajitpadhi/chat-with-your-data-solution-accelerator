@@ -39,6 +39,27 @@ param runtimeStack string = 'python'
 @description('Runtime version.')
 param runtimeVersion string = '3.11'
 
+@description('Optional. Docker image name to use for container function apps.')
+param dockerFullImageName string = ''
+
+@description('Name of the Application Insights instance.')
+param applicationInsightsName string = ''
+
+@description('Resource kind for the site (e.g., functionapp,linux).')
+param kind string = 'functionapp,linux'
+
+@description('Number of workers (instances) to allocate. Set to -1 to use default.')
+param functionAppScaleLimit int = -1
+
+@description('Number of workers (instances) to allocate. Set to -1 to use default.')
+param minimumElasticInstanceCount int = -1
+
+@description('Custom application command line (for Linux apps).')
+param appCommandLine string = ''
+
+@description('Number of workers (instances) to allocate. Set to -1 to use default.')
+param numberOfWorkers int = -1
+
 // ============================================================================
 // Variables
 // ============================================================================
@@ -47,40 +68,93 @@ var identityConfig = empty(managedIdentities) ? null : {
   userAssignedIdentities: contains(managedIdentities, 'userAssignedResourceIds') ? reduce(managedIdentities.userAssignedResourceIds, {}, (cur, id) => union(cur, { '${id}': {} })) : null
 }
 
-var storageConnectionString = 'DefaultEndpointsProtocol=https;AccountName=${storageAccountName};AccountKey=${listKeys(storageAccountResourceId, '2023-05-01').keys[0].value};EndpointSuffix=${environment().suffixes.storage}'
 var linuxFxVersion = '${toUpper(runtimeStack)}|${runtimeVersion}'
-
-var mergedSettings = union(
-  appSettings,
-  { name: 'AzureWebJobsStorage', value: storageConnectionString },
-  { name: 'FUNCTIONS_EXTENSION_VERSION', value: '~4' },
-  { name: 'FUNCTIONS_WORKER_RUNTIME', value: toLower(runtimeStack) },
-  { name: 'WEBSITE_RUN_FROM_PACKAGE', value: '1' }
+var useDocker = !empty(dockerFullImageName)
+var baseAppSettings = union({
+  WEBSITES_ENABLE_APP_SERVICE_STORAGE: 'false'
+  FUNCTIONS_EXTENSION_VERSION: '~4'
+  SCM_DO_BUILD_DURING_DEPLOYMENT: string(useDocker ? false : true)
+  ENABLE_ORYX_BUILD: string(useDocker ? false : contains(kind, 'linux'))
+  AZURE_RESOURCE_GROUP: resourceGroup().name
+  AZURE_SUBSCRIPTION_ID: subscription().subscriptionId
+  // Set the storage account settings to use user managed identity authentication
+  AzureWebJobsStorage__accountName: storageAccountName
+  AzureWebJobsStorage__credential: 'managedidentity'
+},
+  !useDocker ? { FUNCTIONS_WORKER_RUNTIME: runtimeStack } : {},
+  runtimeStack == 'python' && !useDocker ? { PYTHON_ENABLE_GUNICORN_MULTIWORKERS: 'true' } : {},
+  !empty(applicationInsightsName)
+      ? { APPLICATIONINSIGHTS_CONNECTION_STRING: applicationInsights!.properties.ConnectionString }
+      : {}
 )
-
-var defaultSiteConfig = {
-  linuxFxVersion: linuxFxVersion
-  ftpsState: 'Disabled'
-  minTlsVersion: '1.2'
-  appSettings: mergedSettings
-}
-
-var effectiveSiteConfig = union(defaultSiteConfig, siteConfig)
+var configSettings = union(baseAppSettings, appSettings)
 
 // ============================================================================
 // Resource Deployment
 // ============================================================================
-resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
+
+resource functionApp 'Microsoft.Web/sites@2025-03-01' = {
   name: name
   location: location
   tags: tags
-  kind: 'functionapp,linux'
-  identity: identityConfig
+  kind: kind
   properties: {
     serverFarmId: serverFarmResourceId
-    siteConfig: effectiveSiteConfig
+    siteConfig: {
+      linuxFxVersion: linuxFxVersion
+      alwaysOn: true
+      ftpsState: 'FtpsOnly'
+      minTlsVersion: '1.2'
+      appCommandLine: appCommandLine
+      numberOfWorkers: numberOfWorkers != -1 ? numberOfWorkers : null
+      minimumElasticInstanceCount: minimumElasticInstanceCount != -1 ? minimumElasticInstanceCount : null
+      use32BitWorkerProcess: false
+      functionAppScaleLimit: functionAppScaleLimit != -1 ? functionAppScaleLimit : null
+      cors: {
+        allowedOrigins: ['https://portal.azure.com', 'https://ms.portal.azure.com']
+      }
+    }
+    clientAffinityEnabled: false
     httpsOnly: true
   }
+
+  identity: { type: 'SystemAssigned' }
+
+  resource basicPublishingCredentialsPoliciesFtp 'basicPublishingCredentialsPolicies' = {
+    name: 'ftp'
+    properties: {
+      allow: false
+    }
+  }
+
+  resource basicPublishingCredentialsPoliciesScm 'basicPublishingCredentialsPolicies' = {
+    name: 'scm'
+    properties: {
+      allow: false
+    }
+  }
+}
+
+resource applicationInsights 'Microsoft.Insights/components@2020-02-02' existing = if (!empty(applicationInsightsName)) {
+  name: applicationInsightsName
+}
+
+resource configAppSettings 'Microsoft.Web/sites/config@2025-03-01' = {
+  name: 'appsettings'
+  parent: functionApp
+  properties: configSettings
+}
+
+resource configLogs 'Microsoft.Web/sites/config@2025-03-01' = {
+  name: 'logs'
+  parent: functionApp
+  properties: {
+    applicationLogs: { fileSystem: { level: 'Verbose' } }
+    detailedErrorMessages: { enabled: true }
+    failedRequestsTracing: { enabled: true }
+    httpLogs: { fileSystem: { enabled: true, retentionInDays: 1, retentionInMb: 35 } }
+  }
+  dependsOn: [configAppSettings]
 }
 
 // ============================================================================

@@ -47,8 +47,9 @@ resource cosmos 'Microsoft.DocumentDB/databaseAccounts@2025-10-15' = {
     databaseAccountOfferType: 'Standard'
     enableAutomaticFailover: false
     enableMultipleWriteLocations: false
-    disableLocalAuth: true
+    // disableLocalAuth: true
     capabilities: [ { name: 'EnableServerless' } ]
+    disableKeyBasedMetadataWriteAccess: true
   }
 }
 
