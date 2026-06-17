@@ -112,7 +112,10 @@ param azureSearchUrlColumn string = 'url'
 param azureSearchUseIntegratedVectorization bool = false
 
 @description('Optional. Name of Azure OpenAI Resource.')
-var azureOpenAIResourceName string = 'oai-${solutionSuffix}'
+// NOTE: The OpenAI resource (see `module openai` below) is created with `solutionName: solutionName`,
+// not `solutionSuffix` like the other AI services. Keep this variable aligned with the actual
+// deployed resource name so AZURE_OPENAI_RESOURCE in app settings resolves to a real hostname.
+var azureOpenAIResourceName string = 'oai-${solutionName}'
 
 @description('Optional. Name of Azure OpenAI Resource SKU.')
 param azureOpenAISkuName string = 'S0'
@@ -278,7 +281,10 @@ param enableMonitoring bool = false
 
 var blobContainerName = 'documents'
 var queueName = 'doc-processing'
-var clientKey = '${uniqueString(guid(subscription().id, deployment().name))}${newGuidString}'
+// Deterministic — derived from the resource group identity so the same value is produced on every
+// (re)deployment. Using newGuid() previously caused the function host key and the admin app's
+// FUNCTION_KEY appsetting to drift apart when only one of the two modules was updated on a redeploy.
+var clientKey = '${uniqueString(subscription().id, resourceGroup().id, 'cwyd-function-host-key')}${guid(resourceGroup().id, 'cwyd-function-host-key')}'
 
 @description('Optional. Image version tag to use.')
 param appversion string = 'latest_waf' // Update GIT deployment branch
@@ -2172,6 +2178,58 @@ module openAIRoleFunction './modules/identity/role-assignments.bicep' = {
   params: {
     principalId: function!.outputs.principalId
     roleDefinitionId: 'a97b65f3-24c7-4388-baec-2e87135dc908'
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Cognitive Services OpenAI User — required for data-plane calls against the OpenAI account
+// when local auth is disabled. Cognitive Services User alone does not grant the OpenAI
+// dataActions (e.g. openai/deployments/*/completions/action).
+module openAIDataRoleWeb './modules/identity/role-assignments.bicep' = {
+  name: 'openai-data-role-web'
+  params: {
+    principalId: web.outputs.identityPrincipalId
+    roleDefinitionId: '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
+    principalType: 'ServicePrincipal'
+  }
+}
+
+module openAIDataRoleAdmin './modules/identity/role-assignments.bicep' = {
+  name: 'openai-data-role-admin'
+  params: {
+    principalId: adminweb.outputs.identityPrincipalId
+    roleDefinitionId: '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
+    principalType: 'ServicePrincipal'
+  }
+}
+
+module openAIDataRoleFunction './modules/identity/role-assignments.bicep' = {
+  name: 'openai-data-role-function'
+  params: {
+    principalId: function!.outputs.principalId
+    roleDefinitionId: '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// User-assigned managed identity (used by the apps via AZURE_CLIENT_ID in PostgreSQL mode)
+// needs the same Cognitive Services + OpenAI data-plane access as the system-assigned MIs;
+// otherwise DefaultAzureCredential picks the user-assigned identity and calls to Document
+// Intelligence / Content Safety / OpenAI fail with PermissionDenied.
+module cognitiveServicesUserRoleManagedIdentity './modules/identity/role-assignments.bicep' = if (databaseType == 'PostgreSQL') {
+  name: 'cognitive-services-role-managed-identity'
+  params: {
+    principalId: managedIdentityModule!.outputs.principalId
+    roleDefinitionId: 'a97b65f3-24c7-4388-baec-2e87135dc908'
+    principalType: 'ServicePrincipal'
+  }
+}
+
+module openAIDataRoleManagedIdentity './modules/identity/role-assignments.bicep' = if (databaseType == 'PostgreSQL') {
+  name: 'openai-data-role-managed-identity'
+  params: {
+    principalId: managedIdentityModule!.outputs.principalId
+    roleDefinitionId: '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
     principalType: 'ServicePrincipal'
   }
 }
