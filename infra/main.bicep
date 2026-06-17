@@ -431,12 +431,72 @@ module avmDeployment './avm/main.bicep' = if (isAvm) {
 // Activated when deploymentFlavor = 'bicep'
 // ============================================================================
 
-// module bicepDeployment './bicep/main.bicep' = if (isBicep) {
-//   name: take('module.bicep.${solutionName}', 64)
-//   params: {
-//     openAISystemPrompts: openAISystemPrompts
-//   }
-// }
+module bicepDeployment './bicep/main.bicep' = if (isBicep) {
+  name: take('module.bicep.${solutionName}', 64)
+  params: {
+    solutionName: solutionName
+    solutionUniqueText: solutionUniqueText
+    location: location
+    existingLogAnalyticsWorkspaceId: existingLogAnalyticsWorkspaceId
+    hostingPlanSku: hostingPlanSku
+    databaseType: databaseType
+    azureSearchUseSemanticSearch: azureSearchUseSemanticSearch
+    azureSearchSemanticSearchConfig: azureSearchSemanticSearchConfig
+    azureSearchIndexIsPrechunked: azureSearchIndexIsPrechunked
+    azureSearchTopK: azureSearchTopK
+    azureSearchEnableInDomain: azureSearchEnableInDomain
+    azureSearchFieldId: azureSearchFieldId
+    azureSearchContentColumn: azureSearchContentColumn
+    azureSearchVectorColumn: azureSearchVectorColumn
+    azureSearchFilenameColumn: azureSearchFilenameColumn
+    azureSearchFilter: azureSearchFilter
+    azureSearchTitleColumn: azureSearchTitleColumn
+    azureSearchFieldsMetadata: azureSearchFieldsMetadata
+    azureSearchSourceColumn: azureSearchSourceColumn
+    azureSearchTextColumn: azureSearchTextColumn
+    azureSearchLayoutTextColumn: azureSearchLayoutTextColumn
+    azureSearchChunkColumn: azureSearchChunkColumn
+    azureSearchOffsetColumn: azureSearchOffsetColumn
+    azureSearchUrlColumn: azureSearchUrlColumn
+    azureSearchUseIntegratedVectorization: azureSearchUseIntegratedVectorization
+    azureOpenAISkuName: azureOpenAISkuName
+    azureOpenAIModel: azureOpenAIModel
+    azureOpenAIModelName: azureOpenAIModelName
+    azureOpenAIModelVersion: azureOpenAIModelVersion
+    azureOpenAIModelCapacity: azureOpenAIModelCapacity
+    useAdvancedImageProcessing: useAdvancedImageProcessing
+    advancedImageProcessingMaxImages: advancedImageProcessingMaxImages
+    orchestrationStrategy: orchestrationStrategy
+    conversationFlow: conversationFlow
+    azureOpenAITemperature: azureOpenAITemperature
+    azureOpenAITopP: azureOpenAITopP
+    azureOpenAIMaxTokens: azureOpenAIMaxTokens
+    azureOpenAIStopSequence: azureOpenAIStopSequence
+    azureOpenAISystemMessage: azureOpenAISystemMessage
+    azureOpenAIApiVersion: azureOpenAIApiVersion
+    azureOpenAIStream: azureOpenAIStream
+    azureOpenAIEmbeddingModel: azureOpenAIEmbeddingModel
+    azureOpenAIEmbeddingModelName: azureOpenAIEmbeddingModelName
+    azureOpenAIEmbeddingModelVersion: azureOpenAIEmbeddingModelVersion
+    azureOpenAIEmbeddingModelCapacity: azureOpenAIEmbeddingModelCapacity
+    computerVisionSkuName: computerVisionSkuName
+    computerVisionLocation: computerVisionLocation
+    computerVisionVectorizeImageApiVersion: computerVisionVectorizeImageApiVersion
+    computerVisionVectorizeImageModelVersion: computerVisionVectorizeImageModelVersion
+    azureSearchSku: azureSearchSku
+    azureSearchConversationLogIndex: azureSearchConversationLogIndex
+    newGuidString: newGuidString
+    principal: principal
+    appEnvironment: appEnvironment
+    hostingModel: hostingModel
+    logLevel: logLevel
+    recognizedLanguages: recognizedLanguages
+    tags: tags
+    enableMonitoring: enableMonitoring
+    appversion: appversion
+    openAISystemPrompts: openAISystemPrompts
+  }
+}
 
 // ============================================================================
 // Outputs — Coalesced from whichever flavor was deployed
