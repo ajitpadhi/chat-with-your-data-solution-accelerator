@@ -1951,11 +1951,12 @@ module searchRoleWeb './modules/identity/role-assignments.bicep' = {
 // fail with: "Request is blocked: Principal does not have required RBAC
 // permissions to perform action ... readMetadata ... on resource ...".
 // ----------------------------------------------------------------------------
-module cosmosDataRoleWeb './modules/identity/cosmos-sql-role-assignment.bicep' = if (databaseType == 'CosmosDB') {
+module cosmosDataRoleWeb './modules/identity/role-assignments.bicep' = if (databaseType == 'CosmosDB') {
   name: 'cosmos-data-role-web'
   params: {
-    cosmosDbAccountName: cosmosDBModule!.outputs.name
+    cosmosDbAccountName: databaseType == 'CosmosDB' ? cosmosDBModule!.outputs.name : ''
     principalId: web.outputs.identityPrincipalId
+    roleDefinitionId: '00000000-0000-0000-0000-000000000002'
   }
 }
 
@@ -2085,11 +2086,12 @@ module searchRoleBackend './modules/identity/role-assignments.bicep' = {
 }
 
 // Cosmos DB SQL data-plane role for the admin web app (see rationale above).
-module cosmosDataRoleAdminWeb './modules/identity/cosmos-sql-role-assignment.bicep' = if (databaseType == 'CosmosDB') {
+module cosmosDataRoleAdminWeb './modules/identity/role-assignments.bicep' = if (databaseType == 'CosmosDB') {
   name: 'cosmos-data-role-adminweb'
   params: {
-    cosmosDbAccountName: cosmosDBModule!.outputs.name
+    cosmosDbAccountName: databaseType == 'CosmosDB' ? cosmosDBModule!.outputs.name : ''
     principalId: adminweb.outputs.identityPrincipalId
+    roleDefinitionId: '00000000-0000-0000-0000-000000000002'
   }
 }
 
@@ -2276,11 +2278,12 @@ module storageQueueRoleFunction './modules/identity/role-assignments.bicep' = {
 }
 
 // Cosmos DB SQL data-plane role for the function app (see rationale above).
-module cosmosDataRoleFunction './modules/identity/cosmos-sql-role-assignment.bicep' = if (databaseType == 'CosmosDB') {
+module cosmosDataRoleFunction './modules/identity/role-assignments.bicep' = if (databaseType == 'CosmosDB') {
   name: 'cosmos-data-role-function'
   params: {
-    cosmosDbAccountName: cosmosDBModule!.outputs.name
+    cosmosDbAccountName: databaseType == 'CosmosDB' ? cosmosDBModule!.outputs.name : ''
     principalId: function!.outputs.principalId
+    roleDefinitionId: '00000000-0000-0000-0000-000000000002'
   }
 }
 
@@ -2443,11 +2446,13 @@ module searchRoleUser './modules/identity/role-assignments.bicep' = if (principa
 
 // Cosmos DB SQL data-plane role for the deploying user — enables local
 // development and Data Explorer queries when local auth is disabled.
-module cosmosDataRoleUser './modules/identity/cosmos-sql-role-assignment.bicep' = if (principal.id != '' && databaseType == 'CosmosDB') {
+module cosmosDataRoleUser './modules/identity/role-assignments.bicep' = if (principal.id != '' && databaseType == 'CosmosDB') {
   name: 'cosmos-data-role-user'
   params: {
-    cosmosDbAccountName: cosmosDBModule!.outputs.name
+    cosmosDbAccountName: databaseType == 'CosmosDB' ? cosmosDBModule!.outputs.name : ''
     principalId: principal.id
+    roleDefinitionId: '00000000-0000-0000-0000-000000000002'
+    principalType: 'User'
   }
 }
 
