@@ -1921,8 +1921,8 @@ module jumpboxVM './modules/compute/virtual-machine.bicep' = if (enablePrivateNe
     }
     vmSize: vmSize
     availabilityZone: virtualMachineAvailabilityZone
-    adminUsername: vmAdminUsername ?? 'testvmuser'
-    adminPassword: vmAdminPassword ?? 'Vm!${uniqueString(subscription().subscriptionId, solutionName)}${guid(subscription().subscriptionId, solutionName, 'vm-admin-password')}'
+    adminUsername: empty(vmAdminUsername) ? 'testvmuser' : vmAdminUsername
+    adminPassword: empty(vmAdminPassword) ? 'Vm!${uniqueString(subscription().subscriptionId, solutionName)}${guid(subscription().subscriptionId, solutionName, 'vm-admin-password')}' : vmAdminPassword
     subnetResourceId: virtualNetwork!.outputs.administrationSubnetResourceId
     deployingUserPrincipalId: deployingUserPrincipalId
     deployingUserPrincipalType: deployingUserPrincipalType
