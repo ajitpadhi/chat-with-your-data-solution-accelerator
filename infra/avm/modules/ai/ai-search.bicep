@@ -52,6 +52,13 @@ param userAssignedResourceId string = ''
 @description('Public network access setting.')
 param publicNetworkAccess string = 'Enabled'
 
+@description('Authentication options for the search service. When disableLocalAuth=false, this is required to enable AAD/RBAC alongside API keys. The Azure default (when omitted) is `apiKeyOnly`, which BLOCKS AAD tokens with HTTP 403 Forbidden even if RBAC roles are granted — that is the root cause of "Operation returned an invalid status \'Forbidden\'" from the admin app. Default here flips to aadOrApiKey so the SDK\'s DefaultAzureCredential works out of the box.')
+param authOptions object = {
+  aadOrApiKey: {
+    aadAuthFailureMode: 'http401WithBearerChallenge'
+  }
+}
+
 // --- WAF: Telemetry ---
 @description('Optional. Enable/Disable usage telemetry for module.')
 param enableTelemetry bool = true
@@ -77,6 +84,10 @@ resource searchService 'Microsoft.Search/searchServices@2025-05-01' = {
   sku: {
     name: skuName
   }
+  properties: {
+    disableLocalAuth: disableLocalAuth
+    authOptions: disableLocalAuth ? null : authOptions
+  }
 }
 
 // ============================================================================
@@ -95,6 +106,7 @@ module searchServiceUpdate 'br/public:avm/res/search/search-service:0.12.0' = {
     hostingMode: hostingMode
     semanticSearch: semanticSearch
     disableLocalAuth: disableLocalAuth
+    authOptions: disableLocalAuth ? null : authOptions
     publicNetworkAccess: publicNetworkAccess
     managedIdentities: {
       systemAssigned: managedIdentityType == 'SystemAssigned', userAssignedResourceIds: !empty(userAssignedResourceId) ? [userAssignedResourceId] : []

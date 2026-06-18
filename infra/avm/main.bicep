@@ -2639,6 +2639,7 @@ module adminweb './modules/compute/app-service.bicep' = {
         USE_KEY_VAULT: 'true'
         MANAGED_IDENTITY_CLIENT_ID: managedIdentityModule.outputs.clientId
         MANAGED_IDENTITY_RESOURCE_ID: managedIdentityModule.outputs.resourceId
+        AZURE_CLIENT_ID: managedIdentityModule.outputs.clientId // Pin DefaultAzureCredential to the user-assigned MI (which holds Search/OpenAI/Cosmos RBAC); otherwise the system-assigned MI is picked and gets 403 Forbidden.
         APP_ENV: appEnvironment
         AZURE_SEARCH_DIMENSIONS: azureSearchDimensions
         APPLICATIONINSIGHTS_ENABLED: enableMonitoring ? 'true' : 'false'
