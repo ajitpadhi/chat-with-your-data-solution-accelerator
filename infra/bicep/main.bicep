@@ -238,9 +238,6 @@ param azureSearchConversationLogIndex string = 'conversations'
 @description('Name of Function App for Batch document processing.')
 var functionName string = 'func-${solutionSuffix}'
 
-@description('Optional. A new GUID string generated for this deployment. This can be used for unique naming if needed.')
-param newGuidString string = newGuid()
-
 @description('Optional. Principal object for user or service principal to assign application roles. Format: {"id":"<object-id>", "name":"<name-or-upn>", "type":"User|Group|ServicePrincipal"}')
 param principal object = {
   id: '' // Principal ID

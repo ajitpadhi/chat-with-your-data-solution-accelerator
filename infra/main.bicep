@@ -485,7 +485,6 @@ module bicepDeployment './bicep/main.bicep' = if (isBicep) {
     computerVisionVectorizeImageModelVersion: computerVisionVectorizeImageModelVersion
     azureSearchSku: azureSearchSku
     azureSearchConversationLogIndex: azureSearchConversationLogIndex
-    newGuidString: newGuidString
     principal: principal
     appEnvironment: appEnvironment
     hostingModel: hostingModel

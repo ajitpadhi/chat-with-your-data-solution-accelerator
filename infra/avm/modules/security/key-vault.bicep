@@ -157,6 +157,3 @@ output uri string = keyVault.outputs.uri
 
 @description('The resource ID of the key vault.')
 output resourceId string = keyVault.outputs.resourceId
-
-@description('System-assigned identity principal ID.')
-output identityPrincipalId string = keyVault.outputs.?systemAssignedMIPrincipalId ?? ''
