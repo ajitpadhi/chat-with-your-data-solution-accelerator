@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "3457817702326075124"
+      "templateHash": "11175127683521196488"
     }
   },
   "parameters": {
@@ -397,6 +397,13 @@
         "description": "Optional. Azure Computer Vision Vectorize Image Model Version."
       }
     },
+    "azureSearchDimensions": {
+      "type": "string",
+      "defaultValue": "1536",
+      "metadata": {
+        "description": "Optional. Azure Search vector field dimensions. Must match the embedding model dimensions. 1536 for text-embedding-3-small, 3072 for text-embedding-3-large. See https://learn.microsoft.com/en-us/azure/search/cognitive-search-skill-azure-openai-embedding#supported-dimensions-by-modelname.(Only for databaseType=CosmosDB)"
+      }
+    },
     "azureSearchSku": {
       "type": "string",
       "defaultValue": "standard",
@@ -513,7 +520,6 @@
     "solutionSuffix": "[toLower(trim(replace(replace(replace(replace(replace(replace(format('{0}{1}', parameters('solutionName'), parameters('solutionUniqueText')), '-', ''), '_', ''), '.', ''), '/', ''), ' ', ''), '*', '')))]",
     "websiteName": "[format('app-{0}', variables('solutionSuffix'))]",
     "adminWebsiteName": "[format('{0}-admin', variables('websiteName'))]",
-    "azureOpenAIResourceName": "[format('oai-{0}', variables('solutionSuffix'))]",
     "azureAISearchName": "[format('srch-{0}', variables('solutionSuffix'))]",
     "azureSearchIndex": "[format('index-{0}', variables('solutionSuffix'))]",
     "azureSearchIndexer": "[format('indexer-{0}', variables('solutionSuffix'))]",
@@ -521,7 +527,7 @@
     "functionName": "[format('func-{0}', variables('solutionSuffix'))]",
     "blobContainerName": "documents",
     "queueName": "doc-processing",
-    "clientKey": "[format('{0}{1}', uniqueString(guid(subscription().id, deployment().name)), parameters('newGuidString'))]",
+    "clientKey": "[format('{0}{1}', uniqueString(subscription().id, resourceGroup().id, 'cwyd-function-host-key'), guid(resourceGroup().id, 'cwyd-function-host-key'))]",
     "registryName": "cwydcontainerreg",
     "allTags": "[union(createObject('azd-env-name', parameters('solutionName')), parameters('tags'))]",
     "existingTags": "[coalesce(resourceGroup().tags, createObject())]",
@@ -2943,7 +2949,7 @@
         "mode": "Incremental",
         "parameters": {
           "solutionName": {
-            "value": "[parameters('solutionName')]"
+            "value": "[variables('solutionSuffix')]"
           },
           "namePrefix": {
             "value": "oai"
@@ -4796,8 +4802,11 @@
           "serverFarmResourceId": {
             "value": "[reference('webServerFarm').outputs.resourceId.value]"
           },
+          "userAssignedIdentityId": {
+            "value": "[reference('managedIdentityModule').outputs.resourceId.value]"
+          },
           "appSettings": {
-            "value": "[union(createObject('AZURE_BLOB_ACCOUNT_NAME', reference('storage').outputs.name.value, 'AZURE_BLOB_CONTAINER_NAME', variables('blobContainerName'), 'AZURE_FORM_RECOGNIZER_ENDPOINT', reference('formrecognizer').outputs.endpoint.value, 'AZURE_COMPUTER_VISION_ENDPOINT', if(parameters('useAdvancedImageProcessing'), reference('computerVision').outputs.endpoint.value, ''), 'AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_API_VERSION', parameters('computerVisionVectorizeImageApiVersion'), 'AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_MODEL_VERSION', parameters('computerVisionVectorizeImageModelVersion'), 'AZURE_CONTENT_SAFETY_ENDPOINT', reference('contentsafety').outputs.endpoint.value, 'AZURE_OPENAI_RESOURCE', variables('azureOpenAIResourceName'), 'AZURE_OPENAI_MODEL', parameters('azureOpenAIModel'), 'AZURE_OPENAI_MODEL_NAME', parameters('azureOpenAIModelName'), 'AZURE_OPENAI_MODEL_VERSION', parameters('azureOpenAIModelVersion'), 'AZURE_OPENAI_TEMPERATURE', parameters('azureOpenAITemperature'), 'AZURE_OPENAI_TOP_P', parameters('azureOpenAITopP'), 'AZURE_OPENAI_MAX_TOKENS', parameters('azureOpenAIMaxTokens'), 'AZURE_OPENAI_STOP_SEQUENCE', parameters('azureOpenAIStopSequence'), 'AZURE_OPENAI_SYSTEM_MESSAGE', parameters('azureOpenAISystemMessage'), 'AZURE_OPENAI_API_VERSION', parameters('azureOpenAIApiVersion'), 'AZURE_OPENAI_STREAM', parameters('azureOpenAIStream'), 'AZURE_OPENAI_EMBEDDING_MODEL', parameters('azureOpenAIEmbeddingModel'), 'AZURE_OPENAI_EMBEDDING_MODEL_NAME', parameters('azureOpenAIEmbeddingModelName'), 'AZURE_OPENAI_EMBEDDING_MODEL_VERSION', parameters('azureOpenAIEmbeddingModelVersion'), 'AZURE_SPEECH_SERVICE_NAME', reference('speechService').outputs.name.value, 'AZURE_SPEECH_SERVICE_REGION', parameters('location'), 'AZURE_SPEECH_RECOGNIZER_LANGUAGES', parameters('recognizedLanguages'), 'USE_ADVANCED_IMAGE_PROCESSING', parameters('useAdvancedImageProcessing'), 'ADVANCED_IMAGE_PROCESSING_MAX_IMAGES', parameters('advancedImageProcessingMaxImages'), 'ORCHESTRATION_STRATEGY', parameters('orchestrationStrategy'), 'CONVERSATION_FLOW', parameters('conversationFlow'), 'LOGLEVEL', parameters('logLevel'), 'DATABASE_TYPE', parameters('databaseType'), 'OPEN_AI_FUNCTIONS_SYSTEM_PROMPT', parameters('openAISystemPrompts').OPEN_AI_FUNCTIONS_SYSTEM_PROMPT, 'SEMENTIC_KERNEL_SYSTEM_PROMPT', parameters('openAISystemPrompts').SEMANTIC_KERNEL_SYSTEM_PROMPT), if(equals(parameters('databaseType'), 'CosmosDB'), createObject('AZURE_COSMOSDB_ACCOUNT_NAME', reference('cosmosDBModule').outputs.name.value, 'AZURE_COSMOSDB_DATABASE_NAME', reference('cosmosDBModule').outputs.databaseName.value, 'AZURE_COSMOSDB_CONVERSATIONS_CONTAINER_NAME', reference('cosmosDBModule').outputs.containerName.value, 'AZURE_COSMOSDB_ENABLE_FEEDBACK', true(), 'AZURE_SEARCH_USE_SEMANTIC_SEARCH', parameters('azureSearchUseSemanticSearch'), 'AZURE_SEARCH_SERVICE', format('https://{0}.search.windows.net', variables('azureAISearchName')), 'AZURE_SEARCH_INDEX', variables('azureSearchIndex'), 'AZURE_SEARCH_CONVERSATIONS_LOG_INDEX', parameters('azureSearchConversationLogIndex'), 'AZURE_SEARCH_SEMANTIC_SEARCH_CONFIG', parameters('azureSearchSemanticSearchConfig'), 'AZURE_SEARCH_INDEX_IS_PRECHUNKED', parameters('azureSearchIndexIsPrechunked'), 'AZURE_SEARCH_TOP_K', parameters('azureSearchTopK'), 'AZURE_SEARCH_ENABLE_IN_DOMAIN', parameters('azureSearchEnableInDomain'), 'AZURE_SEARCH_FILENAME_COLUMN', parameters('azureSearchFilenameColumn'), 'AZURE_SEARCH_FILTER', parameters('azureSearchFilter'), 'AZURE_SEARCH_FIELDS_ID', parameters('azureSearchFieldId'), 'AZURE_SEARCH_CONTENT_COLUMN', parameters('azureSearchContentColumn'), 'AZURE_SEARCH_CONTENT_VECTOR_COLUMN', parameters('azureSearchVectorColumn'), 'AZURE_SEARCH_TITLE_COLUMN', parameters('azureSearchTitleColumn'), 'AZURE_SEARCH_FIELDS_METADATA', parameters('azureSearchFieldsMetadata'), 'AZURE_SEARCH_SOURCE_COLUMN', parameters('azureSearchSourceColumn'), 'AZURE_SEARCH_CHUNK_COLUMN', parameters('azureSearchChunkColumn'), 'AZURE_SEARCH_OFFSET_COLUMN', parameters('azureSearchOffsetColumn'), 'AZURE_SEARCH_URL_COLUMN', parameters('azureSearchUrlColumn'), 'AZURE_SEARCH_USE_INTEGRATED_VECTORIZATION', parameters('azureSearchUseIntegratedVectorization')), if(equals(parameters('databaseType'), 'PostgreSQL'), createObject('AZURE_POSTGRESQL_HOST_NAME', reference('postgresDBModule').outputs.serverFqdn.value, 'AZURE_POSTGRESQL_DATABASE_NAME', variables('postgresDBName'), 'AZURE_POSTGRESQL_USER', reference('managedIdentityModule').outputs.name.value), createObject())))]"
+            "value": "[union(createObject('AZURE_BLOB_ACCOUNT_NAME', reference('storage').outputs.name.value, 'AZURE_BLOB_CONTAINER_NAME', variables('blobContainerName'), 'AZURE_FORM_RECOGNIZER_ENDPOINT', reference('formrecognizer').outputs.endpoint.value, 'AZURE_COMPUTER_VISION_ENDPOINT', if(parameters('useAdvancedImageProcessing'), reference('computerVision').outputs.endpoint.value, ''), 'AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_API_VERSION', parameters('computerVisionVectorizeImageApiVersion'), 'AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_MODEL_VERSION', parameters('computerVisionVectorizeImageModelVersion'), 'AZURE_CONTENT_SAFETY_ENDPOINT', reference('contentsafety').outputs.endpoint.value, 'AZURE_OPENAI_RESOURCE', reference('openai').outputs.name.value, 'AZURE_OPENAI_MODEL', parameters('azureOpenAIModel'), 'AZURE_OPENAI_MODEL_NAME', parameters('azureOpenAIModelName'), 'AZURE_OPENAI_MODEL_VERSION', parameters('azureOpenAIModelVersion'), 'AZURE_OPENAI_TEMPERATURE', parameters('azureOpenAITemperature'), 'AZURE_OPENAI_TOP_P', parameters('azureOpenAITopP'), 'AZURE_OPENAI_MAX_TOKENS', parameters('azureOpenAIMaxTokens'), 'AZURE_OPENAI_STOP_SEQUENCE', parameters('azureOpenAIStopSequence'), 'AZURE_OPENAI_SYSTEM_MESSAGE', parameters('azureOpenAISystemMessage'), 'AZURE_OPENAI_API_VERSION', parameters('azureOpenAIApiVersion'), 'AZURE_OPENAI_STREAM', parameters('azureOpenAIStream'), 'AZURE_OPENAI_EMBEDDING_MODEL', parameters('azureOpenAIEmbeddingModel'), 'AZURE_OPENAI_EMBEDDING_MODEL_NAME', parameters('azureOpenAIEmbeddingModelName'), 'AZURE_OPENAI_EMBEDDING_MODEL_VERSION', parameters('azureOpenAIEmbeddingModelVersion'), 'AZURE_SPEECH_SERVICE_NAME', reference('speechService').outputs.name.value, 'AZURE_SPEECH_SERVICE_REGION', parameters('location'), 'AZURE_SPEECH_RECOGNIZER_LANGUAGES', parameters('recognizedLanguages'), 'USE_ADVANCED_IMAGE_PROCESSING', parameters('useAdvancedImageProcessing'), 'ADVANCED_IMAGE_PROCESSING_MAX_IMAGES', parameters('advancedImageProcessingMaxImages'), 'ORCHESTRATION_STRATEGY', parameters('orchestrationStrategy'), 'CONVERSATION_FLOW', parameters('conversationFlow'), 'LOGLEVEL', parameters('logLevel'), 'DATABASE_TYPE', parameters('databaseType'), 'OPEN_AI_FUNCTIONS_SYSTEM_PROMPT', parameters('openAISystemPrompts').OPEN_AI_FUNCTIONS_SYSTEM_PROMPT, 'SEMENTIC_KERNEL_SYSTEM_PROMPT', parameters('openAISystemPrompts').SEMANTIC_KERNEL_SYSTEM_PROMPT), if(equals(parameters('databaseType'), 'CosmosDB'), createObject('AZURE_COSMOSDB_ACCOUNT_NAME', reference('cosmosDBModule').outputs.name.value, 'AZURE_COSMOSDB_DATABASE_NAME', reference('cosmosDBModule').outputs.databaseName.value, 'AZURE_COSMOSDB_CONVERSATIONS_CONTAINER_NAME', reference('cosmosDBModule').outputs.containerName.value, 'AZURE_COSMOSDB_ENABLE_FEEDBACK', true(), 'AZURE_SEARCH_USE_SEMANTIC_SEARCH', parameters('azureSearchUseSemanticSearch'), 'AZURE_SEARCH_SERVICE', format('https://{0}.search.windows.net', variables('azureAISearchName')), 'AZURE_SEARCH_INDEX', variables('azureSearchIndex'), 'AZURE_SEARCH_CONVERSATIONS_LOG_INDEX', parameters('azureSearchConversationLogIndex'), 'AZURE_SEARCH_SEMANTIC_SEARCH_CONFIG', parameters('azureSearchSemanticSearchConfig'), 'AZURE_SEARCH_INDEX_IS_PRECHUNKED', parameters('azureSearchIndexIsPrechunked'), 'AZURE_SEARCH_TOP_K', parameters('azureSearchTopK'), 'AZURE_SEARCH_ENABLE_IN_DOMAIN', parameters('azureSearchEnableInDomain'), 'AZURE_SEARCH_FILENAME_COLUMN', parameters('azureSearchFilenameColumn'), 'AZURE_SEARCH_FILTER', parameters('azureSearchFilter'), 'AZURE_SEARCH_FIELDS_ID', parameters('azureSearchFieldId'), 'AZURE_SEARCH_CONTENT_COLUMN', parameters('azureSearchContentColumn'), 'AZURE_SEARCH_CONTENT_VECTOR_COLUMN', parameters('azureSearchVectorColumn'), 'AZURE_SEARCH_TITLE_COLUMN', parameters('azureSearchTitleColumn'), 'AZURE_SEARCH_FIELDS_METADATA', parameters('azureSearchFieldsMetadata'), 'AZURE_SEARCH_SOURCE_COLUMN', parameters('azureSearchSourceColumn'), 'AZURE_SEARCH_CHUNK_COLUMN', parameters('azureSearchChunkColumn'), 'AZURE_SEARCH_OFFSET_COLUMN', parameters('azureSearchOffsetColumn'), 'AZURE_SEARCH_URL_COLUMN', parameters('azureSearchUrlColumn'), 'AZURE_SEARCH_USE_INTEGRATED_VECTORIZATION', parameters('azureSearchUseIntegratedVectorization')), if(equals(parameters('databaseType'), 'PostgreSQL'), createObject('AZURE_POSTGRESQL_HOST_NAME', reference('postgresDBModule').outputs.serverFqdn.value, 'AZURE_POSTGRESQL_DATABASE_NAME', variables('postgresDBName'), 'AZURE_POSTGRESQL_USER', reference('managedIdentityModule').outputs.name.value, 'MANAGED_IDENTITY_CLIENT_ID', reference('managedIdentityModule').outputs.clientId.value, 'MANAGED_IDENTITY_RESOURCE_ID', reference('managedIdentityModule').outputs.resourceId.value, 'AZURE_CLIENT_ID', reference('managedIdentityModule').outputs.clientId.value), createObject())))]"
           }
         },
         "template": {
@@ -5065,6 +5074,7 @@
         "cosmosDBModule",
         "formrecognizer",
         "managedIdentityModule",
+        "openai",
         "postgresDBModule",
         "speechService",
         "storage",
@@ -5398,8 +5408,9 @@
           "serverFarmResourceId": {
             "value": "[reference('webServerFarm').outputs.resourceId.value]"
           },
+          "userAssignedIdentityId": "[if(equals(parameters('databaseType'), 'PostgreSQL'), createObject('value', reference('managedIdentityModule').outputs.resourceId.value), createObject('value', ''))]",
           "appSettings": {
-            "value": "[union(createObject('AZURE_BLOB_ACCOUNT_NAME', reference('storage').outputs.name.value, 'AZURE_BLOB_CONTAINER_NAME', variables('blobContainerName'), 'AZURE_FORM_RECOGNIZER_ENDPOINT', reference('formrecognizer').outputs.endpoint.value, 'AZURE_COMPUTER_VISION_ENDPOINT', if(parameters('useAdvancedImageProcessing'), reference('computerVision').outputs.endpoint.value, ''), 'AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_API_VERSION', parameters('computerVisionVectorizeImageApiVersion'), 'AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_MODEL_VERSION', parameters('computerVisionVectorizeImageModelVersion'), 'AZURE_CONTENT_SAFETY_ENDPOINT', reference('contentsafety').outputs.endpoint.value, 'AZURE_OPENAI_RESOURCE', variables('azureOpenAIResourceName'), 'AZURE_OPENAI_MODEL', parameters('azureOpenAIModel'), 'AZURE_OPENAI_MODEL_NAME', parameters('azureOpenAIModelName'), 'AZURE_OPENAI_MODEL_VERSION', parameters('azureOpenAIModelVersion'), 'AZURE_OPENAI_TEMPERATURE', parameters('azureOpenAITemperature'), 'AZURE_OPENAI_TOP_P', parameters('azureOpenAITopP'), 'AZURE_OPENAI_MAX_TOKENS', parameters('azureOpenAIMaxTokens'), 'AZURE_OPENAI_STOP_SEQUENCE', parameters('azureOpenAIStopSequence'), 'AZURE_OPENAI_SYSTEM_MESSAGE', parameters('azureOpenAISystemMessage'), 'AZURE_OPENAI_API_VERSION', parameters('azureOpenAIApiVersion'), 'AZURE_OPENAI_STREAM', parameters('azureOpenAIStream'), 'AZURE_OPENAI_EMBEDDING_MODEL', parameters('azureOpenAIEmbeddingModel'), 'AZURE_OPENAI_EMBEDDING_MODEL_NAME', parameters('azureOpenAIEmbeddingModelName'), 'AZURE_OPENAI_EMBEDDING_MODEL_VERSION', parameters('azureOpenAIEmbeddingModelVersion'), 'USE_ADVANCED_IMAGE_PROCESSING', parameters('useAdvancedImageProcessing'), 'BACKEND_URL', format('https://{0}.azurewebsites.net', variables('functionName')), 'DOCUMENT_PROCESSING_QUEUE_NAME', variables('queueName'), 'FUNCTION_KEY', variables('clientKey'), 'ORCHESTRATION_STRATEGY', parameters('orchestrationStrategy'), 'CONVERSATION_FLOW', parameters('conversationFlow'), 'LOGLEVEL', parameters('logLevel'), 'DATABASE_TYPE', parameters('databaseType')), if(equals(parameters('databaseType'), 'CosmosDB'), createObject('AZURE_SEARCH_SERVICE', format('https://{0}.search.windows.net', variables('azureAISearchName')), 'AZURE_SEARCH_INDEX', variables('azureSearchIndex'), 'AZURE_SEARCH_USE_SEMANTIC_SEARCH', parameters('azureSearchUseSemanticSearch'), 'AZURE_SEARCH_SEMANTIC_SEARCH_CONFIG', parameters('azureSearchSemanticSearchConfig'), 'AZURE_SEARCH_INDEX_IS_PRECHUNKED', parameters('azureSearchIndexIsPrechunked'), 'AZURE_SEARCH_TOP_K', parameters('azureSearchTopK'), 'AZURE_SEARCH_ENABLE_IN_DOMAIN', parameters('azureSearchEnableInDomain'), 'AZURE_SEARCH_FILENAME_COLUMN', parameters('azureSearchFilenameColumn'), 'AZURE_SEARCH_FILTER', parameters('azureSearchFilter'), 'AZURE_SEARCH_FIELDS_ID', parameters('azureSearchFieldId'), 'AZURE_SEARCH_CONTENT_COLUMN', parameters('azureSearchContentColumn'), 'AZURE_SEARCH_CONTENT_VECTOR_COLUMN', parameters('azureSearchVectorColumn'), 'AZURE_SEARCH_TITLE_COLUMN', parameters('azureSearchTitleColumn'), 'AZURE_SEARCH_FIELDS_METADATA', parameters('azureSearchFieldsMetadata'), 'AZURE_SEARCH_SOURCE_COLUMN', parameters('azureSearchSourceColumn'), 'AZURE_SEARCH_CHUNK_COLUMN', parameters('azureSearchChunkColumn'), 'AZURE_SEARCH_OFFSET_COLUMN', parameters('azureSearchOffsetColumn'), 'AZURE_SEARCH_URL_COLUMN', parameters('azureSearchUrlColumn'), 'AZURE_SEARCH_DATASOURCE_NAME', variables('azureSearchDatasource'), 'AZURE_SEARCH_INDEXER_NAME', variables('azureSearchIndexer'), 'AZURE_SEARCH_USE_INTEGRATED_VECTORIZATION', parameters('azureSearchUseIntegratedVectorization')), if(equals(parameters('databaseType'), 'PostgreSQL'), createObject('AZURE_POSTGRESQL_HOST_NAME', reference('postgresDBModule').outputs.serverFqdn.value, 'AZURE_POSTGRESQL_DATABASE_NAME', variables('postgresDBName'), 'AZURE_POSTGRESQL_USER', reference('managedIdentityModule').outputs.name.value), createObject())))]"
+            "value": "[union(createObject('AZURE_BLOB_ACCOUNT_NAME', reference('storage').outputs.name.value, 'AZURE_BLOB_CONTAINER_NAME', variables('blobContainerName'), 'AZURE_FORM_RECOGNIZER_ENDPOINT', reference('formrecognizer').outputs.endpoint.value, 'AZURE_COMPUTER_VISION_ENDPOINT', if(parameters('useAdvancedImageProcessing'), reference('computerVision').outputs.endpoint.value, ''), 'AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_API_VERSION', parameters('computerVisionVectorizeImageApiVersion'), 'AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_MODEL_VERSION', parameters('computerVisionVectorizeImageModelVersion'), 'AZURE_CONTENT_SAFETY_ENDPOINT', reference('contentsafety').outputs.endpoint.value, 'AZURE_OPENAI_RESOURCE', reference('openai').outputs.name.value, 'AZURE_OPENAI_MODEL', parameters('azureOpenAIModel'), 'AZURE_OPENAI_MODEL_NAME', parameters('azureOpenAIModelName'), 'AZURE_OPENAI_MODEL_VERSION', parameters('azureOpenAIModelVersion'), 'AZURE_OPENAI_TEMPERATURE', parameters('azureOpenAITemperature'), 'AZURE_OPENAI_TOP_P', parameters('azureOpenAITopP'), 'AZURE_OPENAI_MAX_TOKENS', parameters('azureOpenAIMaxTokens'), 'AZURE_OPENAI_STOP_SEQUENCE', parameters('azureOpenAIStopSequence'), 'AZURE_OPENAI_SYSTEM_MESSAGE', parameters('azureOpenAISystemMessage'), 'AZURE_OPENAI_API_VERSION', parameters('azureOpenAIApiVersion'), 'AZURE_OPENAI_STREAM', parameters('azureOpenAIStream'), 'AZURE_OPENAI_EMBEDDING_MODEL', parameters('azureOpenAIEmbeddingModel'), 'AZURE_OPENAI_EMBEDDING_MODEL_NAME', parameters('azureOpenAIEmbeddingModelName'), 'AZURE_OPENAI_EMBEDDING_MODEL_VERSION', parameters('azureOpenAIEmbeddingModelVersion'), 'USE_ADVANCED_IMAGE_PROCESSING', parameters('useAdvancedImageProcessing'), 'BACKEND_URL', format('https://{0}.azurewebsites.net', if(equals(parameters('hostingModel'), 'container'), format('{0}-docker', variables('functionName')), variables('functionName'))), 'DOCUMENT_PROCESSING_QUEUE_NAME', variables('queueName'), 'FUNCTION_KEY', variables('clientKey'), 'ORCHESTRATION_STRATEGY', parameters('orchestrationStrategy'), 'CONVERSATION_FLOW', parameters('conversationFlow'), 'LOGLEVEL', parameters('logLevel'), 'DATABASE_TYPE', parameters('databaseType')), if(equals(parameters('databaseType'), 'CosmosDB'), createObject('AZURE_SEARCH_SERVICE', format('https://{0}.search.windows.net', variables('azureAISearchName')), 'AZURE_SEARCH_INDEX', variables('azureSearchIndex'), 'AZURE_SEARCH_USE_SEMANTIC_SEARCH', parameters('azureSearchUseSemanticSearch'), 'AZURE_SEARCH_SEMANTIC_SEARCH_CONFIG', parameters('azureSearchSemanticSearchConfig'), 'AZURE_SEARCH_INDEX_IS_PRECHUNKED', parameters('azureSearchIndexIsPrechunked'), 'AZURE_SEARCH_TOP_K', parameters('azureSearchTopK'), 'AZURE_SEARCH_ENABLE_IN_DOMAIN', parameters('azureSearchEnableInDomain'), 'AZURE_SEARCH_FILENAME_COLUMN', parameters('azureSearchFilenameColumn'), 'AZURE_SEARCH_FILTER', parameters('azureSearchFilter'), 'AZURE_SEARCH_FIELDS_ID', parameters('azureSearchFieldId'), 'AZURE_SEARCH_CONTENT_COLUMN', parameters('azureSearchContentColumn'), 'AZURE_SEARCH_CONTENT_VECTOR_COLUMN', parameters('azureSearchVectorColumn'), 'AZURE_SEARCH_TITLE_COLUMN', parameters('azureSearchTitleColumn'), 'AZURE_SEARCH_FIELDS_METADATA', parameters('azureSearchFieldsMetadata'), 'AZURE_SEARCH_SOURCE_COLUMN', parameters('azureSearchSourceColumn'), 'AZURE_SEARCH_CHUNK_COLUMN', parameters('azureSearchChunkColumn'), 'AZURE_SEARCH_OFFSET_COLUMN', parameters('azureSearchOffsetColumn'), 'AZURE_SEARCH_URL_COLUMN', parameters('azureSearchUrlColumn'), 'AZURE_SEARCH_DATASOURCE_NAME', variables('azureSearchDatasource'), 'AZURE_SEARCH_INDEXER_NAME', variables('azureSearchIndexer'), 'AZURE_SEARCH_USE_INTEGRATED_VECTORIZATION', parameters('azureSearchUseIntegratedVectorization')), if(equals(parameters('databaseType'), 'PostgreSQL'), createObject('AZURE_POSTGRESQL_HOST_NAME', reference('postgresDBModule').outputs.serverFqdn.value, 'AZURE_POSTGRESQL_DATABASE_NAME', variables('postgresDBName'), 'AZURE_POSTGRESQL_USER', reference('managedIdentityModule').outputs.name.value, 'MANAGED_IDENTITY_CLIENT_ID', reference('managedIdentityModule').outputs.clientId.value, 'MANAGED_IDENTITY_RESOURCE_ID', reference('managedIdentityModule').outputs.resourceId.value), createObject())))]"
           }
         },
         "template": {
@@ -5666,6 +5677,7 @@
         "contentsafety",
         "formrecognizer",
         "managedIdentityModule",
+        "openai",
         "postgresDBModule",
         "storage",
         "webServerFarm"
@@ -6003,12 +6015,14 @@
           "serverFarmResourceId": {
             "value": "[reference('webServerFarm').outputs.resourceId.value]"
           },
+          "userAssignedIdentityId": "[if(equals(parameters('databaseType'), 'PostgreSQL'), createObject('value', reference('managedIdentityModule').outputs.resourceId.value), createObject('value', ''))]",
+          "userAssignedIdentityClientId": "[if(equals(parameters('databaseType'), 'PostgreSQL'), createObject('value', reference('managedIdentityModule').outputs.clientId.value), createObject('value', ''))]",
           "applicationInsightsName": "[if(parameters('enableMonitoring'), createObject('value', reference('app_insights').outputs.name.value), createObject('value', ''))]",
           "storageAccountName": {
             "value": "[reference('storage').outputs.name.value]"
           },
           "appSettings": {
-            "value": "[union(createObject('AZURE_BLOB_ACCOUNT_NAME', reference('storage').outputs.name.value, 'AZURE_BLOB_CONTAINER_NAME', variables('blobContainerName'), 'AZURE_FORM_RECOGNIZER_ENDPOINT', reference('formrecognizer').outputs.endpoint.value, 'AZURE_COMPUTER_VISION_ENDPOINT', if(parameters('useAdvancedImageProcessing'), reference('computerVision').outputs.endpoint.value, ''), 'AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_API_VERSION', parameters('computerVisionVectorizeImageApiVersion'), 'AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_MODEL_VERSION', parameters('computerVisionVectorizeImageModelVersion'), 'AZURE_CONTENT_SAFETY_ENDPOINT', reference('contentsafety').outputs.endpoint.value, 'AZURE_OPENAI_MODEL', parameters('azureOpenAIModel'), 'AZURE_OPENAI_MODEL_NAME', parameters('azureOpenAIModelName'), 'AZURE_OPENAI_MODEL_VERSION', parameters('azureOpenAIModelVersion'), 'AZURE_OPENAI_EMBEDDING_MODEL', parameters('azureOpenAIEmbeddingModel'), 'AZURE_OPENAI_EMBEDDING_MODEL_NAME', parameters('azureOpenAIEmbeddingModelName'), 'AZURE_OPENAI_EMBEDDING_MODEL_VERSION', parameters('azureOpenAIEmbeddingModelVersion'), 'AZURE_OPENAI_RESOURCE', variables('azureOpenAIResourceName'), 'AZURE_OPENAI_API_VERSION', parameters('azureOpenAIApiVersion'), 'USE_ADVANCED_IMAGE_PROCESSING', parameters('useAdvancedImageProcessing'), 'DOCUMENT_PROCESSING_QUEUE_NAME', variables('queueName'), 'ORCHESTRATION_STRATEGY', parameters('orchestrationStrategy'), 'LOGLEVEL', parameters('logLevel'), 'AZURE_OPENAI_SYSTEM_MESSAGE', parameters('azureOpenAISystemMessage'), 'DATABASE_TYPE', parameters('databaseType')), if(equals(parameters('databaseType'), 'CosmosDB'), createObject('AZURE_SEARCH_INDEX', variables('azureSearchIndex'), 'AZURE_SEARCH_SERVICE', format('https://{0}.search.windows.net', variables('azureAISearchName')), 'AZURE_SEARCH_DATASOURCE_NAME', variables('azureSearchDatasource'), 'AZURE_SEARCH_INDEXER_NAME', variables('azureSearchIndexer'), 'AZURE_SEARCH_USE_INTEGRATED_VECTORIZATION', parameters('azureSearchUseIntegratedVectorization'), 'AZURE_SEARCH_FIELDS_ID', parameters('azureSearchFieldId'), 'AZURE_SEARCH_CONTENT_COLUMN', parameters('azureSearchContentColumn'), 'AZURE_SEARCH_CONTENT_VECTOR_COLUMN', parameters('azureSearchVectorColumn'), 'AZURE_SEARCH_TITLE_COLUMN', parameters('azureSearchTitleColumn'), 'AZURE_SEARCH_FIELDS_METADATA', parameters('azureSearchFieldsMetadata'), 'AZURE_SEARCH_SOURCE_COLUMN', parameters('azureSearchSourceColumn'), 'AZURE_SEARCH_CHUNK_COLUMN', parameters('azureSearchChunkColumn'), 'AZURE_SEARCH_OFFSET_COLUMN', parameters('azureSearchOffsetColumn'), 'AZURE_SEARCH_TOP_K', parameters('azureSearchTopK')), if(equals(parameters('databaseType'), 'PostgreSQL'), createObject('AZURE_POSTGRESQL_HOST_NAME', reference('postgresDBModule').outputs.serverFqdn.value, 'AZURE_POSTGRESQL_DATABASE_NAME', variables('postgresDBName'), 'AZURE_POSTGRESQL_USER', reference('managedIdentityModule').outputs.name.value), createObject())))]"
+            "value": "[union(createObject('AZURE_BLOB_ACCOUNT_NAME', reference('storage').outputs.name.value, 'AZURE_BLOB_CONTAINER_NAME', variables('blobContainerName'), 'AZURE_FORM_RECOGNIZER_ENDPOINT', reference('formrecognizer').outputs.endpoint.value, 'AZURE_COMPUTER_VISION_ENDPOINT', if(parameters('useAdvancedImageProcessing'), reference('computerVision').outputs.endpoint.value, ''), 'AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_API_VERSION', parameters('computerVisionVectorizeImageApiVersion'), 'AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_MODEL_VERSION', parameters('computerVisionVectorizeImageModelVersion'), 'AZURE_CONTENT_SAFETY_ENDPOINT', reference('contentsafety').outputs.endpoint.value, 'AZURE_KEY_VAULT_ENDPOINT', reference('keyvault').outputs.uri.value, 'AZURE_OPENAI_MODEL', parameters('azureOpenAIModel'), 'AZURE_OPENAI_MODEL_NAME', parameters('azureOpenAIModelName'), 'AZURE_OPENAI_MODEL_VERSION', parameters('azureOpenAIModelVersion'), 'AZURE_OPENAI_EMBEDDING_MODEL', parameters('azureOpenAIEmbeddingModel'), 'AZURE_OPENAI_EMBEDDING_MODEL_NAME', parameters('azureOpenAIEmbeddingModelName'), 'AZURE_OPENAI_EMBEDDING_MODEL_VERSION', parameters('azureOpenAIEmbeddingModelVersion'), 'AZURE_OPENAI_RESOURCE', reference('openai').outputs.name.value, 'AZURE_OPENAI_API_VERSION', parameters('azureOpenAIApiVersion'), 'USE_ADVANCED_IMAGE_PROCESSING', if(parameters('useAdvancedImageProcessing'), 'true', 'false'), 'DOCUMENT_PROCESSING_QUEUE_NAME', variables('queueName'), 'ORCHESTRATION_STRATEGY', parameters('orchestrationStrategy'), 'LOGLEVEL', parameters('logLevel'), 'PACKAGE_LOGGING_LEVEL', 'WARNING', 'AZURE_LOGGING_PACKAGES', '', 'AZURE_OPENAI_SYSTEM_MESSAGE', parameters('azureOpenAISystemMessage'), 'DATABASE_TYPE', parameters('databaseType'), 'APP_ENV', parameters('appEnvironment'), 'BACKEND_URL', variables('backendUrl'), 'AZURE_SEARCH_DIMENSIONS', parameters('azureSearchDimensions'), 'APPLICATIONINSIGHTS_ENABLED', if(parameters('enableMonitoring'), 'true', 'false')), if(equals(parameters('databaseType'), 'CosmosDB'), createObject('AZURE_SEARCH_INDEX', variables('azureSearchIndex'), 'AZURE_SEARCH_SERVICE', format('https://{0}.search.windows.net', variables('azureAISearchName')), 'AZURE_SEARCH_DATASOURCE_NAME', variables('azureSearchDatasource'), 'AZURE_SEARCH_INDEXER_NAME', variables('azureSearchIndexer'), 'AZURE_SEARCH_USE_INTEGRATED_VECTORIZATION', parameters('azureSearchUseIntegratedVectorization'), 'AZURE_SEARCH_FIELDS_ID', parameters('azureSearchFieldId'), 'AZURE_SEARCH_CONTENT_COLUMN', parameters('azureSearchContentColumn'), 'AZURE_SEARCH_CONTENT_VECTOR_COLUMN', parameters('azureSearchVectorColumn'), 'AZURE_SEARCH_TITLE_COLUMN', parameters('azureSearchTitleColumn'), 'AZURE_SEARCH_FIELDS_METADATA', parameters('azureSearchFieldsMetadata'), 'AZURE_SEARCH_SOURCE_COLUMN', parameters('azureSearchSourceColumn'), 'AZURE_SEARCH_CHUNK_COLUMN', parameters('azureSearchChunkColumn'), 'AZURE_SEARCH_OFFSET_COLUMN', parameters('azureSearchOffsetColumn'), 'AZURE_SEARCH_TOP_K', parameters('azureSearchTopK')), if(equals(parameters('databaseType'), 'PostgreSQL'), createObject('AZURE_POSTGRESQL_HOST_NAME', reference('postgresDBModule').outputs.serverFqdn.value, 'AZURE_POSTGRESQL_DATABASE_NAME', variables('postgresDBName'), 'AZURE_POSTGRESQL_USER', reference('managedIdentityModule').outputs.name.value, 'MANAGED_IDENTITY_CLIENT_ID', reference('managedIdentityModule').outputs.clientId.value, 'MANAGED_IDENTITY_RESOURCE_ID', reference('managedIdentityModule').outputs.resourceId.value, 'AZURE_CLIENT_ID', reference('managedIdentityModule').outputs.clientId.value), createObject())))]"
           }
         },
         "template": {
@@ -6018,7 +6032,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "12981105063709185742"
+              "templateHash": "1379301548661255428"
             }
           },
           "parameters": {
@@ -6093,6 +6107,13 @@
               "defaultValue": "",
               "metadata": {
                 "description": "Resource ID of a user-assigned managed identity to attach to the Function App."
+              }
+            },
+            "userAssignedIdentityClientId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The client ID of the user assigned identity for the function app. This is required to set the AZURE_CLIENT_ID app setting so the function app can authenticate with the user assigned managed identity."
               }
             },
             "kind": {
@@ -6193,7 +6214,7 @@
               "type": "Microsoft.Web/sites/config",
               "apiVersion": "2025-03-01",
               "name": "[format('{0}/{1}', parameters('name'), 'appsettings')]",
-              "properties": "[union(union(createObject('WEBSITES_ENABLE_APP_SERVICE_STORAGE', 'false', 'FUNCTIONS_EXTENSION_VERSION', '~4', 'SCM_DO_BUILD_DURING_DEPLOYMENT', string(if(variables('useDocker'), false(), true())), 'ENABLE_ORYX_BUILD', string(if(variables('useDocker'), false(), contains(parameters('kind'), 'linux'))), 'AZURE_RESOURCE_GROUP', resourceGroup().name, 'AZURE_SUBSCRIPTION_ID', subscription().subscriptionId, 'AzureWebJobsStorage__accountName', parameters('storageAccountName'), 'AzureWebJobsStorage__credential', 'managedidentity'), if(not(variables('useDocker')), createObject('FUNCTIONS_WORKER_RUNTIME', parameters('runtimeStack')), createObject()), if(and(equals(parameters('runtimeStack'), 'python'), not(variables('useDocker'))), createObject('PYTHON_ENABLE_GUNICORN_MULTIWORKERS', 'true'), createObject()), if(not(empty(parameters('applicationInsightsName'))), createObject('APPLICATIONINSIGHTS_CONNECTION_STRING', reference(resourceId('Microsoft.Insights/components', parameters('applicationInsightsName')), '2020-02-02').ConnectionString), createObject())), parameters('appSettings'))]",
+              "properties": "[union(union(createObject('WEBSITES_ENABLE_APP_SERVICE_STORAGE', 'false', 'FUNCTIONS_EXTENSION_VERSION', '~4', 'SCM_DO_BUILD_DURING_DEPLOYMENT', string(if(variables('useDocker'), false(), true())), 'ENABLE_ORYX_BUILD', string(if(variables('useDocker'), false(), contains(parameters('kind'), 'linux'))), 'AZURE_RESOURCE_GROUP', resourceGroup().name, 'AZURE_SUBSCRIPTION_ID', subscription().subscriptionId, 'AzureWebJobsStorage__accountName', parameters('storageAccountName'), 'AzureWebJobsStorage__credential', 'managedidentity', 'AzureWebJobsStorage__clientId', parameters('userAssignedIdentityClientId')), if(not(variables('useDocker')), createObject('FUNCTIONS_WORKER_RUNTIME', parameters('runtimeStack')), createObject()), if(and(equals(parameters('runtimeStack'), 'python'), not(variables('useDocker'))), createObject('PYTHON_ENABLE_GUNICORN_MULTIWORKERS', 'true'), createObject()), if(not(empty(parameters('applicationInsightsName'))), createObject('APPLICATIONINSIGHTS_CONNECTION_STRING', reference(resourceId('Microsoft.Insights/components', parameters('applicationInsightsName')), '2020-02-02').ConnectionString), createObject())), parameters('appSettings'))]",
               "dependsOn": [
                 "[resourceId('Microsoft.Web/sites', parameters('name'))]"
               ]
@@ -6265,7 +6286,9 @@
         "computerVision",
         "contentsafety",
         "formrecognizer",
+        "keyvault",
         "managedIdentityModule",
+        "openai",
         "postgresDBModule",
         "storage",
         "webServerFarm"
@@ -6345,6 +6368,388 @@
       },
       "dependsOn": [
         "function"
+      ]
+    },
+    "openAIDataRoleWeb": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "openai-data-role-web",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "principalId": {
+            "value": "[reference('web').outputs.identityPrincipalId.value]"
+          },
+          "roleDefinitionId": {
+            "value": "5e0bd9bd-7b93-4f28-af87-19fc36ad61bd"
+          },
+          "principalType": {
+            "value": "ServicePrincipal"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "14486149968537421411"
+            }
+          },
+          "parameters": {
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "The principal ID of the user, group, or service principal to assign the role to."
+              }
+            },
+            "principalType": {
+              "type": "string",
+              "defaultValue": "ServicePrincipal",
+              "allowedValues": [
+                "Device",
+                "ForeignGroup",
+                "Group",
+                "ServicePrincipal",
+                "User"
+              ],
+              "metadata": {
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+              }
+            },
+            "roleDefinitionId": {
+              "type": "string",
+              "metadata": {
+                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "principalType": "[parameters('principalType')]",
+                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "web"
+      ]
+    },
+    "openAIDataRoleAdmin": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "openai-data-role-admin",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "principalId": {
+            "value": "[reference('adminweb').outputs.identityPrincipalId.value]"
+          },
+          "roleDefinitionId": {
+            "value": "5e0bd9bd-7b93-4f28-af87-19fc36ad61bd"
+          },
+          "principalType": {
+            "value": "ServicePrincipal"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "14486149968537421411"
+            }
+          },
+          "parameters": {
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "The principal ID of the user, group, or service principal to assign the role to."
+              }
+            },
+            "principalType": {
+              "type": "string",
+              "defaultValue": "ServicePrincipal",
+              "allowedValues": [
+                "Device",
+                "ForeignGroup",
+                "Group",
+                "ServicePrincipal",
+                "User"
+              ],
+              "metadata": {
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+              }
+            },
+            "roleDefinitionId": {
+              "type": "string",
+              "metadata": {
+                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "principalType": "[parameters('principalType')]",
+                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "adminweb"
+      ]
+    },
+    "openAIDataRoleFunction": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "openai-data-role-function",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "principalId": {
+            "value": "[reference('function').outputs.principalId.value]"
+          },
+          "roleDefinitionId": {
+            "value": "5e0bd9bd-7b93-4f28-af87-19fc36ad61bd"
+          },
+          "principalType": {
+            "value": "ServicePrincipal"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "14486149968537421411"
+            }
+          },
+          "parameters": {
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "The principal ID of the user, group, or service principal to assign the role to."
+              }
+            },
+            "principalType": {
+              "type": "string",
+              "defaultValue": "ServicePrincipal",
+              "allowedValues": [
+                "Device",
+                "ForeignGroup",
+                "Group",
+                "ServicePrincipal",
+                "User"
+              ],
+              "metadata": {
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+              }
+            },
+            "roleDefinitionId": {
+              "type": "string",
+              "metadata": {
+                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "principalType": "[parameters('principalType')]",
+                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "function"
+      ]
+    },
+    "cognitiveServicesUserRoleManagedIdentity": {
+      "condition": "[equals(parameters('databaseType'), 'PostgreSQL')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "cognitive-services-role-managed-identity",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "principalId": {
+            "value": "[reference('managedIdentityModule').outputs.principalId.value]"
+          },
+          "roleDefinitionId": {
+            "value": "a97b65f3-24c7-4388-baec-2e87135dc908"
+          },
+          "principalType": {
+            "value": "ServicePrincipal"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "14486149968537421411"
+            }
+          },
+          "parameters": {
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "The principal ID of the user, group, or service principal to assign the role to."
+              }
+            },
+            "principalType": {
+              "type": "string",
+              "defaultValue": "ServicePrincipal",
+              "allowedValues": [
+                "Device",
+                "ForeignGroup",
+                "Group",
+                "ServicePrincipal",
+                "User"
+              ],
+              "metadata": {
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+              }
+            },
+            "roleDefinitionId": {
+              "type": "string",
+              "metadata": {
+                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "principalType": "[parameters('principalType')]",
+                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "managedIdentityModule"
+      ]
+    },
+    "openAIDataRoleManagedIdentity": {
+      "condition": "[equals(parameters('databaseType'), 'PostgreSQL')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "openai-data-role-managed-identity",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "principalId": {
+            "value": "[reference('managedIdentityModule').outputs.principalId.value]"
+          },
+          "roleDefinitionId": {
+            "value": "5e0bd9bd-7b93-4f28-af87-19fc36ad61bd"
+          },
+          "principalType": {
+            "value": "ServicePrincipal"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "14486149968537421411"
+            }
+          },
+          "parameters": {
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "The principal ID of the user, group, or service principal to assign the role to."
+              }
+            },
+            "principalType": {
+              "type": "string",
+              "defaultValue": "ServicePrincipal",
+              "allowedValues": [
+                "Device",
+                "ForeignGroup",
+                "Group",
+                "ServicePrincipal",
+                "User"
+              ],
+              "metadata": {
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+              }
+            },
+            "roleDefinitionId": {
+              "type": "string",
+              "metadata": {
+                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "principalType": "[parameters('principalType')]",
+                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "managedIdentityModule"
       ]
     },
     "openAIRoleFunctionContributor": {
@@ -7607,7 +8012,7 @@
       "metadata": {
         "description": "Azure OpenAI configuration details."
       },
-      "value": "[string(createObject('service_name', reference('speechService').outputs.name.value, 'stream', parameters('azureOpenAIStream'), 'system_message', parameters('azureOpenAISystemMessage'), 'stop_sequence', parameters('azureOpenAIStopSequence'), 'max_tokens', parameters('azureOpenAIMaxTokens'), 'top_p', parameters('azureOpenAITopP'), 'temperature', parameters('azureOpenAITemperature'), 'api_version', parameters('azureOpenAIApiVersion'), 'resource', variables('azureOpenAIResourceName')))]"
+      "value": "[string(createObject('service_name', reference('speechService').outputs.name.value, 'stream', parameters('azureOpenAIStream'), 'system_message', parameters('azureOpenAISystemMessage'), 'stop_sequence', parameters('azureOpenAIStopSequence'), 'max_tokens', parameters('azureOpenAIMaxTokens'), 'top_p', parameters('azureOpenAITopP'), 'temperature', parameters('azureOpenAITemperature'), 'api_version', parameters('azureOpenAIApiVersion'), 'resource', reference('openai').outputs.name.value))]"
     },
     "AZURE_OPENAI_EMBEDDING_MODEL_INFO": {
       "type": "string",

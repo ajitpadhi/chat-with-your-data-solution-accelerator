@@ -283,9 +283,6 @@ var storageAccountName string = 'st${solutionSuffix}'
 @description('Name of Function App for Batch document processing.')
 var functionName string = 'func-${solutionSuffix}'
 
-@description('Azure Speech Service Name.')
-var speechServiceName string = 'spch-${solutionSuffix}'
-
 // ============================================================================
 // Parameters — Identity and Deployment Metadata
 // ============================================================================
