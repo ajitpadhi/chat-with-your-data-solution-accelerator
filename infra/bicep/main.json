@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "11175127683521196488"
+      "templateHash": "13057166734674037483"
     }
   },
   "parameters": {
@@ -425,13 +425,6 @@
         "description": "Optional. Azure AI Search Conversation Log Index."
       }
     },
-    "newGuidString": {
-      "type": "string",
-      "defaultValue": "[newGuid()]",
-      "metadata": {
-        "description": "Optional. A new GUID string generated for this deployment. This can be used for unique naming if needed."
-      }
-    },
     "principal": {
       "type": "object",
       "defaultValue": {
@@ -532,6 +525,7 @@
     "allTags": "[union(createObject('azd-env-name', parameters('solutionName')), parameters('tags'))]",
     "existingTags": "[coalesce(resourceGroup().tags, createObject())]",
     "useExistingLogAnalytics": "[not(empty(parameters('existingLogAnalyticsWorkspaceId')))]",
+    "cosmosDBAccountName": "[format('cosmos-{0}', variables('solutionSuffix'))]",
     "postgresDBName": "postgres",
     "defaultOpenAiDeployments": [
       {
@@ -585,6 +579,42 @@
       "subscriptionId": "[split(parameters('existingLogAnalyticsWorkspaceId'), '/')[2]]",
       "resourceGroup": "[split(parameters('existingLogAnalyticsWorkspaceId'), '/')[4]]",
       "name": "[split(parameters('existingLogAnalyticsWorkspaceId'), '/')[8]]"
+    },
+    "cosmosAccount": {
+      "condition": "[equals(parameters('databaseType'), 'CosmosDB')]",
+      "existing": true,
+      "type": "Microsoft.DocumentDB/databaseAccounts",
+      "apiVersion": "2025-10-15",
+      "name": "[variables('cosmosDBAccountName')]",
+      "dependsOn": [
+        "cosmosDBModule"
+      ]
+    },
+    "cosmosRoleDefinition": {
+      "condition": "[equals(parameters('databaseType'), 'CosmosDB')]",
+      "existing": true,
+      "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions",
+      "apiVersion": "2025-10-15",
+      "name": "[format('{0}/{1}', variables('cosmosDBAccountName'), '00000000-0000-0000-0000-000000000002')]",
+      "dependsOn": [
+        "cosmosDBModule"
+      ]
+    },
+    "cosmosUserRole": {
+      "condition": "[equals(parameters('databaseType'), 'CosmosDB')]",
+      "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+      "apiVersion": "2025-10-15",
+      "name": "[format('{0}/{1}', variables('cosmosDBAccountName'), guid(resourceId('Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions', variables('cosmosDBAccountName'), '00000000-0000-0000-0000-000000000002'), resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDBAccountName'))))]",
+      "properties": {
+        "principalId": "[reference('web').outputs.identityPrincipalId.value]",
+        "roleDefinitionId": "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions', variables('cosmosDBAccountName'), '00000000-0000-0000-0000-000000000002')]",
+        "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDBAccountName'))]"
+      },
+      "dependsOn": [
+        "cosmosDBModule",
+        "cosmosRoleDefinition",
+        "web"
+      ]
     },
     "managedIdentityModule": {
       "condition": "[equals(parameters('databaseType'), 'PostgreSQL')]",
@@ -4802,9 +4832,7 @@
           "serverFarmResourceId": {
             "value": "[reference('webServerFarm').outputs.resourceId.value]"
           },
-          "userAssignedIdentityId": {
-            "value": "[reference('managedIdentityModule').outputs.resourceId.value]"
-          },
+          "userAssignedIdentityId": "[if(equals(parameters('databaseType'), 'PostgreSQL'), createObject('value', reference('managedIdentityModule').outputs.resourceId.value), createObject('value', null()))]",
           "appSettings": {
             "value": "[union(createObject('AZURE_BLOB_ACCOUNT_NAME', reference('storage').outputs.name.value, 'AZURE_BLOB_CONTAINER_NAME', variables('blobContainerName'), 'AZURE_FORM_RECOGNIZER_ENDPOINT', reference('formrecognizer').outputs.endpoint.value, 'AZURE_COMPUTER_VISION_ENDPOINT', if(parameters('useAdvancedImageProcessing'), reference('computerVision').outputs.endpoint.value, ''), 'AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_API_VERSION', parameters('computerVisionVectorizeImageApiVersion'), 'AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_MODEL_VERSION', parameters('computerVisionVectorizeImageModelVersion'), 'AZURE_CONTENT_SAFETY_ENDPOINT', reference('contentsafety').outputs.endpoint.value, 'AZURE_OPENAI_RESOURCE', reference('openai').outputs.name.value, 'AZURE_OPENAI_MODEL', parameters('azureOpenAIModel'), 'AZURE_OPENAI_MODEL_NAME', parameters('azureOpenAIModelName'), 'AZURE_OPENAI_MODEL_VERSION', parameters('azureOpenAIModelVersion'), 'AZURE_OPENAI_TEMPERATURE', parameters('azureOpenAITemperature'), 'AZURE_OPENAI_TOP_P', parameters('azureOpenAITopP'), 'AZURE_OPENAI_MAX_TOKENS', parameters('azureOpenAIMaxTokens'), 'AZURE_OPENAI_STOP_SEQUENCE', parameters('azureOpenAIStopSequence'), 'AZURE_OPENAI_SYSTEM_MESSAGE', parameters('azureOpenAISystemMessage'), 'AZURE_OPENAI_API_VERSION', parameters('azureOpenAIApiVersion'), 'AZURE_OPENAI_STREAM', parameters('azureOpenAIStream'), 'AZURE_OPENAI_EMBEDDING_MODEL', parameters('azureOpenAIEmbeddingModel'), 'AZURE_OPENAI_EMBEDDING_MODEL_NAME', parameters('azureOpenAIEmbeddingModelName'), 'AZURE_OPENAI_EMBEDDING_MODEL_VERSION', parameters('azureOpenAIEmbeddingModelVersion'), 'AZURE_SPEECH_SERVICE_NAME', reference('speechService').outputs.name.value, 'AZURE_SPEECH_SERVICE_REGION', parameters('location'), 'AZURE_SPEECH_RECOGNIZER_LANGUAGES', parameters('recognizedLanguages'), 'USE_ADVANCED_IMAGE_PROCESSING', parameters('useAdvancedImageProcessing'), 'ADVANCED_IMAGE_PROCESSING_MAX_IMAGES', parameters('advancedImageProcessingMaxImages'), 'ORCHESTRATION_STRATEGY', parameters('orchestrationStrategy'), 'CONVERSATION_FLOW', parameters('conversationFlow'), 'LOGLEVEL', parameters('logLevel'), 'DATABASE_TYPE', parameters('databaseType'), 'OPEN_AI_FUNCTIONS_SYSTEM_PROMPT', parameters('openAISystemPrompts').OPEN_AI_FUNCTIONS_SYSTEM_PROMPT, 'SEMENTIC_KERNEL_SYSTEM_PROMPT', parameters('openAISystemPrompts').SEMANTIC_KERNEL_SYSTEM_PROMPT), if(equals(parameters('databaseType'), 'CosmosDB'), createObject('AZURE_COSMOSDB_ACCOUNT_NAME', reference('cosmosDBModule').outputs.name.value, 'AZURE_COSMOSDB_DATABASE_NAME', reference('cosmosDBModule').outputs.databaseName.value, 'AZURE_COSMOSDB_CONVERSATIONS_CONTAINER_NAME', reference('cosmosDBModule').outputs.containerName.value, 'AZURE_COSMOSDB_ENABLE_FEEDBACK', true(), 'AZURE_SEARCH_USE_SEMANTIC_SEARCH', parameters('azureSearchUseSemanticSearch'), 'AZURE_SEARCH_SERVICE', format('https://{0}.search.windows.net', variables('azureAISearchName')), 'AZURE_SEARCH_INDEX', variables('azureSearchIndex'), 'AZURE_SEARCH_CONVERSATIONS_LOG_INDEX', parameters('azureSearchConversationLogIndex'), 'AZURE_SEARCH_SEMANTIC_SEARCH_CONFIG', parameters('azureSearchSemanticSearchConfig'), 'AZURE_SEARCH_INDEX_IS_PRECHUNKED', parameters('azureSearchIndexIsPrechunked'), 'AZURE_SEARCH_TOP_K', parameters('azureSearchTopK'), 'AZURE_SEARCH_ENABLE_IN_DOMAIN', parameters('azureSearchEnableInDomain'), 'AZURE_SEARCH_FILENAME_COLUMN', parameters('azureSearchFilenameColumn'), 'AZURE_SEARCH_FILTER', parameters('azureSearchFilter'), 'AZURE_SEARCH_FIELDS_ID', parameters('azureSearchFieldId'), 'AZURE_SEARCH_CONTENT_COLUMN', parameters('azureSearchContentColumn'), 'AZURE_SEARCH_CONTENT_VECTOR_COLUMN', parameters('azureSearchVectorColumn'), 'AZURE_SEARCH_TITLE_COLUMN', parameters('azureSearchTitleColumn'), 'AZURE_SEARCH_FIELDS_METADATA', parameters('azureSearchFieldsMetadata'), 'AZURE_SEARCH_SOURCE_COLUMN', parameters('azureSearchSourceColumn'), 'AZURE_SEARCH_CHUNK_COLUMN', parameters('azureSearchChunkColumn'), 'AZURE_SEARCH_OFFSET_COLUMN', parameters('azureSearchOffsetColumn'), 'AZURE_SEARCH_URL_COLUMN', parameters('azureSearchUrlColumn'), 'AZURE_SEARCH_USE_INTEGRATED_VECTORIZATION', parameters('azureSearchUseIntegratedVectorization')), if(equals(parameters('databaseType'), 'PostgreSQL'), createObject('AZURE_POSTGRESQL_HOST_NAME', reference('postgresDBModule').outputs.serverFqdn.value, 'AZURE_POSTGRESQL_DATABASE_NAME', variables('postgresDBName'), 'AZURE_POSTGRESQL_USER', reference('managedIdentityModule').outputs.name.value, 'MANAGED_IDENTITY_CLIENT_ID', reference('managedIdentityModule').outputs.clientId.value, 'MANAGED_IDENTITY_RESOURCE_ID', reference('managedIdentityModule').outputs.resourceId.value, 'AZURE_CLIENT_ID', reference('managedIdentityModule').outputs.clientId.value), createObject())))]"
           }

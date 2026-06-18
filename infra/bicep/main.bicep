@@ -1584,6 +1584,8 @@ module applicationInsightsDashboard './modules/monitoring/portal-dashboard.bicep
   }
 }
 
+var cosmosDBAccountName = 'cosmos-${solutionSuffix}'
+
 module cosmosDBModule './modules/data/cosmos-db-nosql.bicep' = if (databaseType == 'CosmosDB') {
   name: take('module.cosmos-db-nosql.${solutionName}', 64)
   params: {
@@ -1822,7 +1824,7 @@ module web './modules/compute/app-service.bicep' = {
     tags: union(tags, { 'azd-service-name': 'web' })
     linuxFxVersion: webLinuxFxVersion
     serverFarmResourceId: webServerFarm.outputs.resourceId
-    userAssignedIdentityId: managedIdentityModule!.outputs.resourceId
+    userAssignedIdentityId: databaseType == 'PostgreSQL' ? managedIdentityModule!.outputs.resourceId : null
     appSettings: union(
       {
         AZURE_BLOB_ACCOUNT_NAME: storage.outputs.name
