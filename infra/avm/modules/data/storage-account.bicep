@@ -70,13 +70,47 @@ param enablePrivateNetworking bool = false
 @description('Subnet resource ID for the private endpoint.')
 param privateEndpointSubnetId string = ''
 
-@description('Private DNS zone resource IDs for Storage (blob).')
+@description('Private DNS zone resource IDs for Storage. Deprecated — use privateEndpointServices instead so each sub-service (blob/queue/file/table) gets its own PE bound to its matching DNS zone. Kept for back-compat: when set and privateEndpointServices is empty, only a single "blob" PE is created.')
 param privateDnsZoneResourceIds array = []
+
+@description('Per-service private endpoint definitions. Each item: { service: blob|queue|file|table|web|dfs, privateDnsZoneResourceId: <id> }. Required when enablePrivateNetworking=true and the function app uses AzureWebJobsStorage with managed identity — the host needs blob, queue and table reachable, and the consumption/elastic SKUs additionally need file.')
+param privateEndpointServices array = []
 
 var privateDnsZoneConfigs = [for (zoneId, i) in privateDnsZoneResourceIds: {
   name: 'dns-zone-${i}'
   privateDnsZoneResourceId: zoneId
 }]
+
+// Resolve PEs from the new per-service list (one PE per service, each with its matching DNS zone).
+var multiServicePrivateEndpoints = [for s in privateEndpointServices: {
+  name: 'pep-${name}-${s.service}'
+  customNetworkInterfaceName: 'nic-${name}-${s.service}'
+  subnetResourceId: privateEndpointSubnetId
+  service: s.service
+  privateDnsZoneGroup: {
+    privateDnsZoneGroupConfigs: [
+      {
+        name: '${s.service}-dns'
+        privateDnsZoneResourceId: s.privateDnsZoneResourceId
+      }
+    ]
+  }
+}]
+
+// Legacy single-blob fallback for callers that haven't migrated to privateEndpointServices.
+var legacyBlobPrivateEndpoints = [
+  {
+    name: 'pep-${name}'
+    customNetworkInterfaceName: 'nic-${name}'
+    subnetResourceId: privateEndpointSubnetId
+    service: 'blob'
+    privateDnsZoneGroup: {
+      privateDnsZoneGroupConfigs: privateDnsZoneConfigs
+    }
+  }
+]
+
+var resolvedPrivateEndpoints = !empty(privateEndpointServices) ? multiServicePrivateEndpoints : legacyBlobPrivateEndpoints
 
 // --- Role Assignments ---
 @description('Optional. Array of role assignments to create on the Storage Account.')
@@ -112,17 +146,7 @@ module storage 'br/public:avm/res/storage/storage-account:0.32.0' = {
     }
     queueServices: queueServices
     diagnosticSettings: !empty(diagnosticSettings) ? diagnosticSettings : []
-    privateEndpoints: enablePrivateNetworking ? [
-      {
-        name: 'pep-${name}'
-        customNetworkInterfaceName: 'nic-${name}'
-        subnetResourceId: privateEndpointSubnetId
-        service: 'blob'
-        privateDnsZoneGroup: {
-          privateDnsZoneGroupConfigs: privateDnsZoneConfigs
-        }
-      }
-    ] : []
+    privateEndpoints: enablePrivateNetworking ? resolvedPrivateEndpoints : []
     roleAssignments: !empty(roleAssignments) ? roleAssignments : []
   }
 }

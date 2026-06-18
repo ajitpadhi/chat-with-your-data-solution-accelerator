@@ -440,6 +440,7 @@ var privateDnsZones = [
   'privatelink.cognitiveservices.azure.com'
   'privatelink.openai.azure.com'
   'privatelink.vaultcore.azure.net'
+  'privatelink.table.${environment().suffixes.storage}'
 ]
 
 var dnsZoneIndex = {
@@ -452,6 +453,7 @@ var dnsZoneIndex = {
   cognitiveServices: 6
   openAI: 7
   keyVault: 8
+  storageTable: 9
 }
 
 var defaultOpenAiDeployments = [
@@ -2098,15 +2100,30 @@ module storage './modules/data/storage-account.bicep' = {
         roleDefinitionIdOrName: 'Storage File Data Privileged Contributor'
         principalType: 'ServicePrincipal'
       }
+      {
+        // Required for Azure Functions managed-identity AzureWebJobsStorage (the runtime persists
+        // host metadata to a Tables endpoint). Without this the function host fails to start with
+        // a 401 from the table service and the portal shows "We were not able to load some
+        // functions in the list due to errors".
+        principalId: managedIdentityModule.outputs.principalId
+        roleDefinitionIdOrName: '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3' // Storage Table Data Contributor
+        principalType: 'ServicePrincipal'
+      }
     ]
     allowSharedKeyAccess: true
     publicNetworkAccess: enablePrivateEndpointsStorage ? 'Disabled' : 'Enabled'
     networkAcls: { bypass: 'AzureServices', defaultAction: enablePrivateEndpointsStorage ? 'Deny' : 'Allow' }
+    enablePrivateNetworking: enablePrivateNetworking
     privateEndpointSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.backendSubnetResourceId : ''
-    privateDnsZoneResourceIds: enablePrivateNetworking ? [
-      privateDnsZoneDeployments[dnsZoneIndex.storageBlob]!.outputs.resourceId
-      privateDnsZoneDeployments[dnsZoneIndex.storageQueue]!.outputs.resourceId
-      privateDnsZoneDeployments[dnsZoneIndex.storageFile]!.outputs.resourceId
+    // The storage account exposes 4 sub-services (blob/queue/file/table). Each one needs its own
+    // private endpoint with its own DNS zone group — a PE for "blob" does NOT make queue/table/file
+    // reachable. Previous template created only a single blob PE, so the function app could not
+    // reach AzureWebJobsStorage and refused to start.
+    privateEndpointServices: enablePrivateNetworking ? [
+      { service: 'blob',  privateDnsZoneResourceId: privateDnsZoneDeployments[dnsZoneIndex.storageBlob]!.outputs.resourceId }
+      { service: 'queue', privateDnsZoneResourceId: privateDnsZoneDeployments[dnsZoneIndex.storageQueue]!.outputs.resourceId }
+      { service: 'file',  privateDnsZoneResourceId: privateDnsZoneDeployments[dnsZoneIndex.storageFile]!.outputs.resourceId }
+      { service: 'table', privateDnsZoneResourceId: privateDnsZoneDeployments[dnsZoneIndex.storageTable]!.outputs.resourceId }
     ] : []
   }
 }
