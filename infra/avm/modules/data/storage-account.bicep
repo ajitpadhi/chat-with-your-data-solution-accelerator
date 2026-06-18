@@ -70,7 +70,7 @@ param enablePrivateNetworking bool = false
 @description('Subnet resource ID for the private endpoint.')
 param privateEndpointSubnetId string = ''
 
-@description('Private DNS zone resource IDs for Storage. Deprecated — use privateEndpointServices instead so each sub-service (blob/queue/file/table) gets its own PE bound to its matching DNS zone. Kept for back-compat: when set and privateEndpointServices is empty, only a single "blob" PE is created.')
+@description('Private DNS zone resource IDs for Storage (blob).')
 param privateDnsZoneResourceIds array = []
 
 @description('Per-service private endpoint definitions. Each item: { service: blob|queue|file|table|web|dfs, privateDnsZoneResourceId: <id> }. Required when enablePrivateNetworking=true and the function app uses AzureWebJobsStorage with managed identity — the host needs blob, queue and table reachable, and the consumption/elastic SKUs additionally need file.')
@@ -116,6 +116,9 @@ var resolvedPrivateEndpoints = !empty(privateEndpointServices) ? multiServicePri
 @description('Optional. Array of role assignments to create on the Storage Account.')
 param roleAssignments array = []
 
+@description('Optional. Managed identities for the resource.')
+param managedIdentities object = { systemAssigned: true }
+
 // ============================================================================
 // AVM Module Deployment
 // ============================================================================
@@ -137,6 +140,7 @@ module storage 'br/public:avm/res/storage/storage-account:0.32.0' = {
     requireInfrastructureEncryption: true
     publicNetworkAccess: publicNetworkAccess
     networkAcls: networkAcls
+    managedIdentities: managedIdentities
     blobServices: {
       containers: [for container in containers: {
         name: container.name

@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "13057166734674037483"
+      "templateHash": "13938188418607612079"
     }
   },
   "parameters": {
@@ -525,7 +525,6 @@
     "allTags": "[union(createObject('azd-env-name', parameters('solutionName')), parameters('tags'))]",
     "existingTags": "[coalesce(resourceGroup().tags, createObject())]",
     "useExistingLogAnalytics": "[not(empty(parameters('existingLogAnalyticsWorkspaceId')))]",
-    "cosmosDBAccountName": "[format('cosmos-{0}', variables('solutionSuffix'))]",
     "postgresDBName": "postgres",
     "defaultOpenAiDeployments": [
       {
@@ -579,42 +578,6 @@
       "subscriptionId": "[split(parameters('existingLogAnalyticsWorkspaceId'), '/')[2]]",
       "resourceGroup": "[split(parameters('existingLogAnalyticsWorkspaceId'), '/')[4]]",
       "name": "[split(parameters('existingLogAnalyticsWorkspaceId'), '/')[8]]"
-    },
-    "cosmosAccount": {
-      "condition": "[equals(parameters('databaseType'), 'CosmosDB')]",
-      "existing": true,
-      "type": "Microsoft.DocumentDB/databaseAccounts",
-      "apiVersion": "2025-10-15",
-      "name": "[variables('cosmosDBAccountName')]",
-      "dependsOn": [
-        "cosmosDBModule"
-      ]
-    },
-    "cosmosRoleDefinition": {
-      "condition": "[equals(parameters('databaseType'), 'CosmosDB')]",
-      "existing": true,
-      "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions",
-      "apiVersion": "2025-10-15",
-      "name": "[format('{0}/{1}', variables('cosmosDBAccountName'), '00000000-0000-0000-0000-000000000002')]",
-      "dependsOn": [
-        "cosmosDBModule"
-      ]
-    },
-    "cosmosUserRole": {
-      "condition": "[equals(parameters('databaseType'), 'CosmosDB')]",
-      "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
-      "apiVersion": "2025-10-15",
-      "name": "[format('{0}/{1}', variables('cosmosDBAccountName'), guid(resourceId('Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions', variables('cosmosDBAccountName'), '00000000-0000-0000-0000-000000000002'), resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDBAccountName'))))]",
-      "properties": {
-        "principalId": "[reference('web').outputs.identityPrincipalId.value]",
-        "roleDefinitionId": "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions', variables('cosmosDBAccountName'), '00000000-0000-0000-0000-000000000002')]",
-        "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDBAccountName'))]"
-      },
-      "dependsOn": [
-        "cosmosDBModule",
-        "cosmosRoleDefinition",
-        "web"
-      ]
     },
     "managedIdentityModule": {
       "condition": "[equals(parameters('databaseType'), 'PostgreSQL')]",
@@ -3843,7 +3806,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -3864,18 +3827,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -3883,6 +3854,17 @@
                 "principalId": "[parameters('principalId')]",
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
               }
             }
           ]
@@ -3919,7 +3901,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -3940,18 +3922,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -3959,6 +3949,17 @@
                 "principalId": "[parameters('principalId')]",
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
               }
             }
           ]
@@ -3996,7 +3997,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -4017,18 +4018,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -4036,6 +4045,17 @@
                 "principalId": "[parameters('principalId')]",
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
               }
             }
           ]
@@ -4073,7 +4093,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -4094,18 +4114,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -4113,6 +4141,17 @@
                 "principalId": "[parameters('principalId')]",
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
               }
             }
           ]
@@ -5136,7 +5175,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -5157,18 +5196,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -5176,6 +5223,17 @@
                 "principalId": "[parameters('principalId')]",
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
               }
             }
           ]
@@ -5212,7 +5270,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -5233,18 +5291,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -5252,6 +5318,17 @@
                 "principalId": "[parameters('principalId')]",
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
               }
             }
           ]
@@ -5288,7 +5365,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -5309,18 +5386,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -5328,6 +5413,17 @@
                 "principalId": "[parameters('principalId')]",
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
               }
             }
           ]
@@ -5364,7 +5460,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -5385,18 +5481,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -5405,11 +5509,117 @@
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
               }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
+              }
             }
           ]
         }
       },
       "dependsOn": [
+        "web"
+      ]
+    },
+    "cosmosDataRoleWeb": {
+      "condition": "[equals(parameters('databaseType'), 'CosmosDB')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "cosmos-data-role-web",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "cosmosDbAccountName": "[if(equals(parameters('databaseType'), 'CosmosDB'), createObject('value', reference('cosmosDBModule').outputs.name.value), createObject('value', ''))]",
+          "principalId": {
+            "value": "[reference('web').outputs.identityPrincipalId.value]"
+          },
+          "roleDefinitionId": {
+            "value": "00000000-0000-0000-0000-000000000002"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "17404511722455293308"
+            }
+          },
+          "parameters": {
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "The principal ID of the user, group, or service principal to assign the role to."
+              }
+            },
+            "principalType": {
+              "type": "string",
+              "defaultValue": "ServicePrincipal",
+              "allowedValues": [
+                "Device",
+                "ForeignGroup",
+                "Group",
+                "ServicePrincipal",
+                "User"
+              ],
+              "metadata": {
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
+              }
+            },
+            "roleDefinitionId": {
+              "type": "string",
+              "metadata": {
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
+              }
+            }
+          },
+          "resources": [
+            {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "principalType": "[parameters('principalType')]",
+                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "cosmosDBModule",
         "web"
       ]
     },
@@ -5738,7 +5948,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -5759,18 +5969,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -5778,6 +5996,17 @@
                 "principalId": "[parameters('principalId')]",
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
               }
             }
           ]
@@ -5814,7 +6043,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -5835,18 +6064,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -5854,6 +6091,17 @@
                 "principalId": "[parameters('principalId')]",
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
               }
             }
           ]
@@ -5890,7 +6138,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -5911,18 +6159,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -5930,6 +6186,17 @@
                 "principalId": "[parameters('principalId')]",
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
               }
             }
           ]
@@ -5966,7 +6233,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -5987,18 +6254,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -6007,12 +6282,118 @@
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
               }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
+              }
             }
           ]
         }
       },
       "dependsOn": [
         "adminweb"
+      ]
+    },
+    "cosmosDataRoleAdminWeb": {
+      "condition": "[equals(parameters('databaseType'), 'CosmosDB')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "cosmos-data-role-adminweb",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "cosmosDbAccountName": "[if(equals(parameters('databaseType'), 'CosmosDB'), createObject('value', reference('cosmosDBModule').outputs.name.value), createObject('value', ''))]",
+          "principalId": {
+            "value": "[reference('adminweb').outputs.identityPrincipalId.value]"
+          },
+          "roleDefinitionId": {
+            "value": "00000000-0000-0000-0000-000000000002"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "17404511722455293308"
+            }
+          },
+          "parameters": {
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "The principal ID of the user, group, or service principal to assign the role to."
+              }
+            },
+            "principalType": {
+              "type": "string",
+              "defaultValue": "ServicePrincipal",
+              "allowedValues": [
+                "Device",
+                "ForeignGroup",
+                "Group",
+                "ServicePrincipal",
+                "User"
+              ],
+              "metadata": {
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
+              }
+            },
+            "roleDefinitionId": {
+              "type": "string",
+              "metadata": {
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
+              }
+            }
+          },
+          "resources": [
+            {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "principalType": "[parameters('principalType')]",
+                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "adminweb",
+        "cosmosDBModule"
       ]
     },
     "function": {
@@ -6349,7 +6730,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -6370,18 +6751,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -6389,6 +6778,17 @@
                 "principalId": "[parameters('principalId')]",
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
               }
             }
           ]
@@ -6425,7 +6825,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -6446,18 +6846,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -6465,6 +6873,17 @@
                 "principalId": "[parameters('principalId')]",
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
               }
             }
           ]
@@ -6501,7 +6920,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -6522,18 +6941,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -6541,6 +6968,17 @@
                 "principalId": "[parameters('principalId')]",
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
               }
             }
           ]
@@ -6577,7 +7015,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -6598,18 +7036,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -6617,6 +7063,17 @@
                 "principalId": "[parameters('principalId')]",
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
               }
             }
           ]
@@ -6654,7 +7111,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -6675,18 +7132,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -6694,6 +7159,17 @@
                 "principalId": "[parameters('principalId')]",
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
               }
             }
           ]
@@ -6731,7 +7207,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -6752,18 +7228,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -6771,6 +7255,17 @@
                 "principalId": "[parameters('principalId')]",
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
               }
             }
           ]
@@ -6807,7 +7302,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -6828,18 +7323,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -6847,6 +7350,17 @@
                 "principalId": "[parameters('principalId')]",
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
               }
             }
           ]
@@ -6883,7 +7397,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -6904,18 +7418,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -6923,6 +7445,17 @@
                 "principalId": "[parameters('principalId')]",
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
               }
             }
           ]
@@ -6957,7 +7490,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -6978,18 +7511,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -6997,6 +7538,17 @@
                 "principalId": "[parameters('principalId')]",
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
               }
             }
           ]
@@ -7032,7 +7584,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -7053,18 +7605,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -7073,6 +7633,17 @@
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
               }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
+              }
             }
           ]
         }
@@ -7080,6 +7651,101 @@
       "dependsOn": [
         "function",
         "managedIdentityModule"
+      ]
+    },
+    "cosmosDataRoleFunction": {
+      "condition": "[equals(parameters('databaseType'), 'CosmosDB')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "cosmos-data-role-function",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "cosmosDbAccountName": "[if(equals(parameters('databaseType'), 'CosmosDB'), createObject('value', reference('cosmosDBModule').outputs.name.value), createObject('value', ''))]",
+          "principalId": {
+            "value": "[reference('function').outputs.principalId.value]"
+          },
+          "roleDefinitionId": {
+            "value": "00000000-0000-0000-0000-000000000002"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "17404511722455293308"
+            }
+          },
+          "parameters": {
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "The principal ID of the user, group, or service principal to assign the role to."
+              }
+            },
+            "principalType": {
+              "type": "string",
+              "defaultValue": "ServicePrincipal",
+              "allowedValues": [
+                "Device",
+                "ForeignGroup",
+                "Group",
+                "ServicePrincipal",
+                "User"
+              ],
+              "metadata": {
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
+              }
+            },
+            "roleDefinitionId": {
+              "type": "string",
+              "metadata": {
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
+              }
+            }
+          },
+          "resources": [
+            {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "principalType": "[parameters('principalType')]",
+                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "cosmosDBModule",
+        "function"
       ]
     },
     "workbook": {
@@ -7695,7 +8361,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -7716,18 +8382,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -7735,6 +8409,17 @@
                 "principalId": "[parameters('principalId')]",
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
               }
             }
           ]
@@ -7769,7 +8454,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -7790,18 +8475,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -7809,6 +8502,17 @@
                 "principalId": "[parameters('principalId')]",
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
               }
             }
           ]
@@ -7843,7 +8547,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -7864,18 +8568,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -7883,6 +8595,17 @@
                 "principalId": "[parameters('principalId')]",
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
               }
             }
           ]
@@ -7917,7 +8640,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14486149968537421411"
+              "templateHash": "17404511722455293308"
             }
           },
           "parameters": {
@@ -7938,18 +8661,26 @@
                 "User"
               ],
               "metadata": {
-                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User."
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
               }
             },
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "The role definition ID of the role to assign. This can be a built-in role or a custom role."
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
               }
             }
           },
           "resources": [
             {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
@@ -7958,10 +8689,118 @@
                 "principalType": "[parameters('principalType')]",
                 "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
               }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
+              }
             }
           ]
         }
       }
+    },
+    "cosmosDataRoleUser": {
+      "condition": "[and(not(equals(parameters('principal').id, '')), equals(parameters('databaseType'), 'CosmosDB'))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "cosmos-data-role-user",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "cosmosDbAccountName": "[if(equals(parameters('databaseType'), 'CosmosDB'), createObject('value', reference('cosmosDBModule').outputs.name.value), createObject('value', ''))]",
+          "principalId": {
+            "value": "[parameters('principal').id]"
+          },
+          "roleDefinitionId": {
+            "value": "00000000-0000-0000-0000-000000000002"
+          },
+          "principalType": {
+            "value": "User"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "17404511722455293308"
+            }
+          },
+          "parameters": {
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "The principal ID of the user, group, or service principal to assign the role to."
+              }
+            },
+            "principalType": {
+              "type": "string",
+              "defaultValue": "ServicePrincipal",
+              "allowedValues": [
+                "Device",
+                "ForeignGroup",
+                "Group",
+                "ServicePrincipal",
+                "User"
+              ],
+              "metadata": {
+                "description": "The type of principal to assign the role to. Allowed values: Device, ForeignGroup, Group, ServicePrincipal, User. Ignored for Cosmos SQL role assignments (Cosmos infers type from the principal)."
+              }
+            },
+            "roleDefinitionId": {
+              "type": "string",
+              "metadata": {
+                "description": "The role definition ID to assign. For ARM assignments this is a built-in or custom role GUID. For Cosmos SQL assignments (when cosmosDbAccountName is set) this is a Cosmos SQL role definition GUID — defaults to the Built-in Data Contributor (00000000-0000-0000-0000-000000000002)."
+              }
+            },
+            "cosmosDbAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. The name of an existing Cosmos DB (NoSQL) account. When provided, this module creates a Cosmos SQL data-plane role assignment instead of an ARM role assignment."
+              }
+            }
+          },
+          "resources": [
+            {
+              "condition": "[empty(parameters('cosmosDbAccountName'))]",
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(subscription().id, resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "principalType": "[parameters('principalType')]",
+                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('cosmosDbAccountName')))]",
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-05-15",
+              "name": "[format('{0}/{1}', parameters('cosmosDbAccountName'), guid(resourceGroup().id, parameters('cosmosDbAccountName'), parameters('principalId'), parameters('roleDefinitionId')))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName')), parameters('roleDefinitionId'))]",
+                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "cosmosDBModule"
+      ]
     }
   },
   "outputs": {

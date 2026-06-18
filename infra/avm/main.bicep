@@ -1981,7 +1981,6 @@ module cosmosDBModule './modules/data/cosmos-db-nosql.bicep' = if (databaseType 
     location: location
     tags: tags
     enableTelemetry: enableTelemetry
-    publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
     diagnosticSettings: monitoringDiagnosticSettings
     zoneRedundant: enableRedundancy
     enableAutomaticFailover: enableRedundancy
@@ -2018,6 +2017,7 @@ module postgresDBModule './modules/data/postgresql-flexible-server.bicep' = if (
     skuTier: enableScalability ? 'GeneralPurpose' : 'Burstable'
     highAvailability: enableRedundancy ? 'ZoneRedundant' : 'Disabled'
     highAvailabilityZone: enableRedundancy ? 2 : -1
+    enablePrivateNetworking: enablePrivateNetworking
     publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
     privateEndpointSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.backendSubnetResourceId : ''
     privateDnsZoneResourceIds: enablePrivateNetworking ? [
@@ -2101,10 +2101,6 @@ module storage './modules/data/storage-account.bicep' = {
         principalType: 'ServicePrincipal'
       }
       {
-        // Required for Azure Functions managed-identity AzureWebJobsStorage (the runtime persists
-        // host metadata to a Tables endpoint). Without this the function host fails to start with
-        // a 401 from the table service and the portal shows "We were not able to load some
-        // functions in the list due to errors".
         principalId: managedIdentityModule.outputs.principalId
         roleDefinitionIdOrName: '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3' // Storage Table Data Contributor
         principalType: 'ServicePrincipal'
@@ -2115,10 +2111,6 @@ module storage './modules/data/storage-account.bicep' = {
     networkAcls: { bypass: 'AzureServices', defaultAction: enablePrivateEndpointsStorage ? 'Deny' : 'Allow' }
     enablePrivateNetworking: enablePrivateNetworking
     privateEndpointSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.backendSubnetResourceId : ''
-    // The storage account exposes 4 sub-services (blob/queue/file/table). Each one needs its own
-    // private endpoint with its own DNS zone group — a PE for "blob" does NOT make queue/table/file
-    // reachable. Previous template created only a single blob PE, so the function app could not
-    // reach AzureWebJobsStorage and refused to start.
     privateEndpointServices: enablePrivateNetworking ? [
       { service: 'blob',  privateDnsZoneResourceId: privateDnsZoneDeployments[dnsZoneIndex.storageBlob]!.outputs.resourceId }
       { service: 'queue', privateDnsZoneResourceId: privateDnsZoneDeployments[dnsZoneIndex.storageQueue]!.outputs.resourceId }
@@ -2558,6 +2550,7 @@ module web './modules/compute/app-service.bicep' = {
         APP_ENV: appEnvironment
         AZURE_SEARCH_DIMENSIONS: azureSearchDimensions
         APPLICATIONINSIGHTS_ENABLED: enableMonitoring ? 'true' : 'false'
+        APPLICATIONINSIGHTS_CONNECTION_STRING: enableMonitoring ? app_insights!.outputs.connectionString : ''
       },
       openAISystemPrompts,
       databaseType == 'CosmosDB'
@@ -2617,6 +2610,7 @@ module adminweb './modules/compute/app-service.bicep' = {
     linuxFxVersion: adminWebLinuxFxVersion
     diagnosticSettings: monitoringDiagnosticSettings
     vnetRouteAllEnabled: enablePrivateNetworking ? true : false
+    virtualNetworkSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.webserverfarmSubnetResourceId : ''
     e2eEncryptionEnabled: appServicePlanIsPremium
     appSettings: union(
       {
@@ -2660,6 +2654,7 @@ module adminweb './modules/compute/app-service.bicep' = {
         APP_ENV: appEnvironment
         AZURE_SEARCH_DIMENSIONS: azureSearchDimensions
         APPLICATIONINSIGHTS_ENABLED: enableMonitoring ? 'true' : 'false'
+        APPLICATIONINSIGHTS_CONNECTION_STRING: enableMonitoring ? app_insights!.outputs.connectionString : ''
       },
       openAISystemPrompts,
       databaseType == 'CosmosDB'
@@ -2750,6 +2745,7 @@ module function './modules/compute/function-app.bicep' = {
         BACKEND_URL: backendUrl
         AZURE_SEARCH_DIMENSIONS: azureSearchDimensions
         APPLICATIONINSIGHTS_ENABLED: enableMonitoring ? 'true' : 'false'
+        APPLICATIONINSIGHTS_CONNECTION_STRING: enableMonitoring ? app_insights!.outputs.connectionString : ''
       },
       openAISystemPrompts,
       databaseType == 'CosmosDB'

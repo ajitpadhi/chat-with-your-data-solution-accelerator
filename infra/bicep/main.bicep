@@ -1584,8 +1584,6 @@ module applicationInsightsDashboard './modules/monitoring/portal-dashboard.bicep
   }
 }
 
-var cosmosDBAccountName = 'cosmos-${solutionSuffix}'
-
 module cosmosDBModule './modules/data/cosmos-db-nosql.bicep' = if (databaseType == 'CosmosDB') {
   name: take('module.cosmos-db-nosql.${solutionName}', 64)
   params: {

@@ -36,9 +36,6 @@ param enableTelemetry bool = true
 param diagnosticSettings array = []
 
 // --- WAF: Private Networking ---
-@description('Public network access setting.')
-param publicNetworkAccess string = 'Enabled'
-
 @description('Whether to enable private networking.')
 param enablePrivateNetworking bool = false
 
