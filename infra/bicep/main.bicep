@@ -1584,6 +1584,8 @@ module applicationInsightsDashboard './modules/monitoring/portal-dashboard.bicep
   }
 }
 
+var cosmosDBAccountName = 'cosmos-${solutionSuffix}'
+
 module cosmosDBModule './modules/data/cosmos-db-nosql.bicep' = if (databaseType == 'CosmosDB') {
   name: take('module.cosmos-db-nosql.${solutionName}', 64)
   params: {
@@ -1822,7 +1824,7 @@ module web './modules/compute/app-service.bicep' = {
     tags: union(tags, { 'azd-service-name': 'web' })
     linuxFxVersion: webLinuxFxVersion
     serverFarmResourceId: webServerFarm.outputs.resourceId
-    userAssignedIdentityId: managedIdentityModule!.outputs.resourceId
+    userAssignedIdentityId: databaseType == 'PostgreSQL' ? managedIdentityModule!.outputs.resourceId : null
     appSettings: union(
       {
         AZURE_BLOB_ACCOUNT_NAME: storage.outputs.name
@@ -1941,21 +1943,30 @@ module searchRoleWeb './modules/identity/role-assignments.bicep' = {
   }
 }
 
-// resource cosmosRoleDefinition 'Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions@2024-05-15' existing = {
-//   name: '${cosmosDBModule!.outputs.name}/00000000-0000-0000-0000-000000000002'
-// }
+resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2025-10-15' existing = if (databaseType == 'CosmosDB') {
+  name: cosmosDBAccountName
+  dependsOn: [
+    cosmosDBModule
+  ]
+}
 
-// module cosmosUserRole './modules/identity/role-assignments.bicep' = if (databaseType == 'CosmosDB') {
-//   name: 'cosmos-sql-user-role-${web.name}'
-//   params: {
-//     principalType: 'ServicePrincipal'
-//     roleDefinitionId: cosmosRoleDefinition.id
-//     principalId: web.outputs.identityPrincipalId
-//   }
-//   dependsOn: [
-//     cosmosRoleDefinition
-//   ]
-// }
+resource cosmosRoleDefinition 'Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions@2025-10-15' existing = if (databaseType == 'CosmosDB') {
+  parent: cosmosAccount
+  name: '00000000-0000-0000-0000-000000000002' // Cosmos DB Built-in Data Contributor
+}
+
+resource cosmosUserRole 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2025-10-15' = if (databaseType == 'CosmosDB') {
+  parent: cosmosAccount
+  name: guid(cosmosRoleDefinition.id, cosmosAccount.id)
+  properties: {
+    principalId: web.outputs.identityPrincipalId
+    roleDefinitionId: cosmosRoleDefinition.id
+    scope: cosmosAccount.id
+  }
+  dependsOn: [
+    cosmosRoleDefinition
+  ]
+}
 
 var adminWebLinuxFxVersion = hostingModel == 'container'
   ? 'DOCKER|${registryName}.azurecr.io/rag-adminwebapp:${appversion}'
