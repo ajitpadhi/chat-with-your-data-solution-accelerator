@@ -1953,7 +1953,7 @@ module jumpboxVM './modules/compute/virtual-machine.bicep' = if (enablePrivateNe
 @batchSize(5)
 module privateDnsZoneDeployments './modules/networking/private-dns-zone.bicep' = [
   for (zone, i) in privateDnsZones: if (enablePrivateNetworking) {
-    name: 'avm.res.network.private-dns-zone.${contains(zone, 'azurecontainerapps.io') ? 'containerappenv' : split(zone, '.')[1]}'
+    name: 'module.private-dns-zone.${contains(zone, 'azurecontainerapps.io') ? 'containerappenv' : split(zone, '.')[1]}'
     params: {
       name: zone
       tags: allTags
@@ -2698,7 +2698,7 @@ module function './modules/compute/function-app.bicep' = {
     runtimeStack: 'python'
     runtimeVersion: '3.11'
     dockerFullImageName: hostingModel == 'container' ? '${registryName}.azurecr.io/rag-backend:${appversion}' : ''
-    virtualNetworkSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.backendSubnetResourceId : ''
+    virtualNetworkSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.webserverfarmSubnetResourceId : ''
     appSettings: union(
       {
         AZURE_BLOB_ACCOUNT_NAME: storageAccountName
@@ -2824,7 +2824,7 @@ module avmEventGridSystemTopic './modules/data/event-grid.bicep'= {
       ? [
           {
             name: 'diagnosticSettings'
-            workspaceResourceId: log_analytics!.outputs.logAnalyticsWorkspaceId
+            workspaceResourceId: log_analytics!.outputs.resourceId
             metricCategories: [
               {
                 category: 'AllMetrics'
