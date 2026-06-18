@@ -1953,21 +1953,23 @@ module searchRoleWeb './modules/identity/role-assignments.bicep' = {
   }
 }
 
-// resource cosmosRoleDefinition 'Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions@2024-05-15' existing = {
-//   name: '${cosmosDBModule!.outputs.name}/00000000-0000-0000-0000-000000000002'
-// }
-
-// module cosmosUserRole './modules/identity/role-assignments.bicep' = if (databaseType == 'CosmosDB') {
-//   name: 'cosmos-sql-user-role-${web.name}'
-//   params: {
-//     principalType: 'ServicePrincipal'
-//     roleDefinitionId: cosmosRoleDefinition.id
-//     principalId: web.outputs.identityPrincipalId
-//   }
-//   dependsOn: [
-//     cosmosRoleDefinition
-//   ]
-// }
+// ----------------------------------------------------------------------------
+// Cosmos DB SQL data-plane role assignments (Built-in Data Contributor)
+//
+// ARM `Microsoft.Authorization/roleAssignments` does NOT grant Cosmos DB
+// data-plane access — operations like list/read/write on conversations are
+// gated by `Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments` against
+// the Cosmos SQL role definition. Without these the web/admin/function apps
+// fail with: "Request is blocked: Principal does not have required RBAC
+// permissions to perform action ... readMetadata ... on resource ...".
+// ----------------------------------------------------------------------------
+module cosmosDataRoleWeb './modules/identity/cosmos-sql-role-assignment.bicep' = if (databaseType == 'CosmosDB') {
+  name: 'cosmos-data-role-web'
+  params: {
+    cosmosDbAccountName: cosmosDBModule!.outputs.name
+    principalId: web.outputs.identityPrincipalId
+  }
+}
 
 var adminWebLinuxFxVersion = hostingModel == 'container'
   ? 'DOCKER|${registryName}.azurecr.io/rag-adminwebapp:${appversion}'
@@ -2091,6 +2093,15 @@ module searchRoleBackend './modules/identity/role-assignments.bicep' = {
     principalId: adminweb.outputs.identityPrincipalId
     roleDefinitionId: '8ebe5a00-799e-43f5-93ac-243d3dce84a7'
     principalType: 'ServicePrincipal'
+  }
+}
+
+// Cosmos DB SQL data-plane role for the admin web app (see rationale above).
+module cosmosDataRoleAdminWeb './modules/identity/cosmos-sql-role-assignment.bicep' = if (databaseType == 'CosmosDB') {
+  name: 'cosmos-data-role-adminweb'
+  params: {
+    cosmosDbAccountName: cosmosDBModule!.outputs.name
+    principalId: adminweb.outputs.identityPrincipalId
   }
 }
 
@@ -2276,6 +2287,15 @@ module storageQueueRoleFunction './modules/identity/role-assignments.bicep' = {
   }
 }
 
+// Cosmos DB SQL data-plane role for the function app (see rationale above).
+module cosmosDataRoleFunction './modules/identity/cosmos-sql-role-assignment.bicep' = if (databaseType == 'CosmosDB') {
+  name: 'cosmos-data-role-function'
+  params: {
+    cosmosDbAccountName: cosmosDBModule!.outputs.name
+    principalId: function!.outputs.principalId
+  }
+}
+
 var wookbookContents = loadTextContent('../workbooks/workbook.json')
 var wookbookContentsSubReplaced = replace(wookbookContents, '{subscription-id}', subscription().id)
 var wookbookContentsRGReplaced = replace(wookbookContentsSubReplaced, '{resource-group}', resourceGroup().name)
@@ -2430,6 +2450,16 @@ module searchRoleUser './modules/identity/role-assignments.bicep' = if (principa
     principalId: principal.id
     roleDefinitionId: '8ebe5a00-799e-43f5-93ac-243d3dce84a7'
     principalType: 'User'
+  }
+}
+
+// Cosmos DB SQL data-plane role for the deploying user — enables local
+// development and Data Explorer queries when local auth is disabled.
+module cosmosDataRoleUser './modules/identity/cosmos-sql-role-assignment.bicep' = if (principal.id != '' && databaseType == 'CosmosDB') {
+  name: 'cosmos-data-role-user'
+  params: {
+    cosmosDbAccountName: cosmosDBModule!.outputs.name
+    principalId: principal.id
   }
 }
 
