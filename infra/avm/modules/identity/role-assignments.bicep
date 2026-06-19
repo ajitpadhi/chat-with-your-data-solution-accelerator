@@ -14,12 +14,12 @@ module roleAssignmentsModule 'br/public:avm/ptn/authorization/resource-role-assi
       'module.resource-role-assignments.${uniqueString(assignment.principalId, assignment.roleDefinitionId, assignment.resourceId)}',
       64
     )
-    params: {
+  params: {
       principalId: assignment.principalId
       roleDefinitionId: assignment.roleDefinitionId
       resourceId: assignment.resourceId
       roleName: assignment.roleName
       principalType: assignment.principalType
-    }
   }
+}
 ]

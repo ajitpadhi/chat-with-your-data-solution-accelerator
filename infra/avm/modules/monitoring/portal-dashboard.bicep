@@ -28,7 +28,7 @@ param enableTelemetry bool = true
 // ============================================================================
 // AVM Module Deployment
 // ============================================================================
-module dashboard 'br/public:avm/res/portal/dashboard:0.3.1' = {
+module dashboard 'br/public:avm/res/portal/dashboard:0.3.2' = {
   name: take('avm.res.portal.dashboard.${name}', 64)
   params: {
     name: name

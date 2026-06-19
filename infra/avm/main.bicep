@@ -2178,7 +2178,10 @@ module openai './modules/ai/ai-services.bicep' = {
     disableLocalAuth: true
     enablePrivateNetworking: enablePrivateNetworking
     diagnosticSettings: monitoringDiagnosticSettings
-    userAssignedResourceId: managedIdentityModule.outputs.resourceId
+    publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
+    managedIdentities: {
+      systemAssigned: true, userAssignedResourceIds: [managedIdentityModule.outputs.resourceId]
+    }
     enableTelemetry: enableTelemetry
     allowedFqdnList: concat(
       [
@@ -2249,7 +2252,10 @@ module computerVision './modules/ai/ai-services.bicep' = if (useAdvancedImagePro
     diagnosticSettings: monitoringDiagnosticSettings
     enablePrivateNetworking: enablePrivateNetworking
     enableTelemetry: enableTelemetry
-    userAssignedResourceId: managedIdentityModule.outputs.resourceId
+    publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
+    managedIdentities: {
+      systemAssigned: true, userAssignedResourceIds: [managedIdentityModule.outputs.resourceId]
+    }
     privateEndpointSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.backendSubnetResourceId : ''
     privateDnsZoneResourceIds: enablePrivateNetworking ? [
       privateDnsZoneDeployments[dnsZoneIndex.cognitiveServices]!.outputs.resourceId
@@ -2291,7 +2297,10 @@ module speechService './modules/ai/ai-services.bicep' = {
     enablePrivateNetworking: enablePrivateNetworkingSpeech
     diagnosticSettings: monitoringDiagnosticSettings
     enableTelemetry: enableTelemetry
-    userAssignedResourceId: managedIdentityModule.outputs.resourceId
+    publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
+    managedIdentities: {
+      systemAssigned: true, userAssignedResourceIds: [managedIdentityModule.outputs.resourceId]
+    }
     privateEndpointSubnetId: enablePrivateNetworkingSpeech ? virtualNetwork!.outputs.backendSubnetResourceId : ''
     privateDnsZoneResourceIds: enablePrivateNetworkingSpeech ? [
       privateDnsZoneDeployments[dnsZoneIndex.cognitiveServices]!.outputs.resourceId
@@ -2331,6 +2340,10 @@ module formrecognizer './modules/ai/ai-services.bicep' = {
       '${storageAccountName}.queue.${environment().suffixes.storage}'
     ]
     enablePrivateNetworking: enablePrivateNetworking
+    publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
+    managedIdentities: {
+      systemAssigned: true, userAssignedResourceIds: [managedIdentityModule.outputs.resourceId]
+    }
     enableTelemetry: enableTelemetry
     diagnosticSettings: monitoringDiagnosticSettings
     privateEndpointSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.backendSubnetResourceId : ''
@@ -2374,7 +2387,10 @@ module contentsafety './modules/ai/ai-services.bicep' = {
     disableLocalAuth: true
     diagnosticSettings: monitoringDiagnosticSettings
     enablePrivateNetworking: enablePrivateNetworking
-    userAssignedResourceId: managedIdentityModule.outputs.resourceId
+    publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
+    managedIdentities: {
+      systemAssigned: true, userAssignedResourceIds: [managedIdentityModule.outputs.resourceId]
+    }
     enableTelemetry: enableTelemetry
     privateEndpointSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.backendSubnetResourceId : ''
     privateDnsZoneResourceIds: enablePrivateNetworking ? [
@@ -2413,7 +2429,14 @@ module search './modules/ai/ai-search.bicep' = if (databaseType == 'CosmosDB') {
     semanticSearch: azureSearchUseSemanticSearch ? 'free' : 'disabled'
     diagnosticSettings: monitoringDiagnosticSettings
     publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
-    userAssignedResourceId: managedIdentityModule.outputs.resourceId
+    managedIdentities: {
+      systemAssigned: true, userAssignedResourceIds: [managedIdentityModule.outputs.resourceId]
+    }
+    authOptions: {
+      aadOrApiKey: {
+        aadAuthFailureMode: 'http401WithBearerChallenge'
+      }
+    }
     privateEndpoints: enablePrivateNetworking
       ? [
           {
@@ -2502,9 +2525,13 @@ module web './modules/compute/app-service.bicep' = {
     kind: hostingModel == 'container' ? 'app,linux,container' : 'app,linux'
     enableTelemetry: enableTelemetry
     serverFarmResourceId: webServerFarm.outputs.resourceId
-    userAssignedResourceId: managedIdentityModule.outputs.resourceId
+    publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
+    managedIdentities: {
+      systemAssigned: true, userAssignedResourceIds: [managedIdentityModule.outputs.resourceId]
+    }
     linuxFxVersion: webLinuxFxVersion
     diagnosticSettings: monitoringDiagnosticSettings
+    applicationInsightResourceId: enableMonitoring ? app_insights!.outputs.resourceId : ''
     virtualNetworkSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.webserverfarmSubnetResourceId : ''
     vnetRouteAllEnabled: enablePrivateNetworking ? true : false
     e2eEncryptionEnabled: appServicePlanIsPremium
@@ -2550,7 +2577,7 @@ module web './modules/compute/app-service.bicep' = {
         APP_ENV: appEnvironment
         AZURE_SEARCH_DIMENSIONS: azureSearchDimensions
         APPLICATIONINSIGHTS_ENABLED: enableMonitoring ? 'true' : 'false'
-        APPLICATIONINSIGHTS_CONNECTION_STRING: enableMonitoring ? app_insights!.outputs.connectionString : ''
+        // APPLICATIONINSIGHTS_CONNECTION_STRING: enableMonitoring ? app_insights!.outputs.connectionString : ''
       },
       openAISystemPrompts,
       databaseType == 'CosmosDB'
@@ -2606,7 +2633,11 @@ module adminweb './modules/compute/app-service.bicep' = {
     tags: union(tags, { 'azd-service-name': hostingModel == 'container' ? 'adminweb-docker' : 'adminweb' })
     kind: hostingModel == 'container' ? 'app,linux,container' : 'app,linux'
     serverFarmResourceId: webServerFarm.outputs.resourceId
-    userAssignedResourceId: managedIdentityModule.outputs.resourceId
+    enableTelemetry: enableTelemetry
+    publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
+    managedIdentities: {
+      systemAssigned: true, userAssignedResourceIds: [managedIdentityModule.outputs.resourceId]
+    }
     linuxFxVersion: adminWebLinuxFxVersion
     diagnosticSettings: monitoringDiagnosticSettings
     vnetRouteAllEnabled: enablePrivateNetworking ? true : false
@@ -2654,7 +2685,7 @@ module adminweb './modules/compute/app-service.bicep' = {
         APP_ENV: appEnvironment
         AZURE_SEARCH_DIMENSIONS: azureSearchDimensions
         APPLICATIONINSIGHTS_ENABLED: enableMonitoring ? 'true' : 'false'
-        APPLICATIONINSIGHTS_CONNECTION_STRING: enableMonitoring ? app_insights!.outputs.connectionString : ''
+        // APPLICATIONINSIGHTS_CONNECTION_STRING: enableMonitoring ? app_insights!.outputs.connectionString : ''
       },
       openAISystemPrompts,
       databaseType == 'CosmosDB'
@@ -2704,13 +2735,23 @@ module function './modules/compute/function-app.bicep' = {
     kind: hostingModel == 'container' ? 'functionapp,linux,container' : 'functionapp,linux'
     serverFarmResourceId: webServerFarm.outputs.resourceId
     storageAccountName: storage.outputs.name
-    applicationInsightsName: enableMonitoring ? app_insights!.outputs.name : ''
+    applicationInsightResourceId: enableMonitoring ? app_insights!.outputs.resourceId : ''
+    enableTelemetry: enableTelemetry
     userAssignedIdentityClientId: managedIdentityModule.outputs.clientId
     managedIdentities: { systemAssigned: true, userAssignedResourceIds: !empty(managedIdentityModule.outputs.resourceId) ? [managedIdentityModule.outputs.resourceId] : [] }
     runtimeStack: 'python'
     runtimeVersion: '3.11'
     dockerFullImageName: hostingModel == 'container' ? '${registryName}.azurecr.io/rag-backend:${appversion}' : ''
     virtualNetworkSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.webserverfarmSubnetResourceId : ''
+    siteConfig: {
+      alwaysOn: true
+      cors: {
+        allowedOrigins: []
+      }
+      healthCheckPath: ''
+      minTlsVersion: '1.2'
+      ftpsState: 'FtpsOnly'
+    }
     appSettings: union(
       {
         AZURE_BLOB_ACCOUNT_NAME: storageAccountName
@@ -2872,8 +2913,6 @@ module avmEventGridSystemTopic './modules/data/event-grid.bicep'= {
         expirationTimeUtc: '2099-01-01T11:00:21.715Z'
       }
     ]
-    // Use only user-assigned identity
-    managedIdentities: { systemAssigned: true }
     enableTelemetry: enableTelemetry
   }
 }

@@ -25,17 +25,40 @@ param linuxFxVersion string
 @description('Application settings key-value pairs.')
 param appSettings object = {}
 
+@description('Optional. Resource ID of Application Insights for monitoring integration.')
+param applicationInsightResourceId string = ''
+
 @description('Whether to enable Always On.')
 param alwaysOn bool = true
 
-@description('Kind of web app.')
+@description('Optional. Health check path for the app.')
+param healthCheckPath string = ''
+
+@description('Optional. Whether to enable WebSockets.')
+param webSocketsEnabled bool = false
+
+@description('Optional. Command line for the application.')
+param appCommandLine string = ''
+
+@description('Required. Type of site to deploy.')
+@allowed([
+  'functionapp' // function app windows os
+  'functionapp,linux' // function app linux os
+  'functionapp,workflowapp' // logic app workflow
+  'functionapp,workflowapp,linux' // logic app docker container
+  'functionapp,linux,container' // function app linux container
+  'functionapp,linux,container,azurecontainerapps' // function app linux container azure container apps
+  'app,linux' // linux web app
+  'app' // windows web app
+  'linux,api' // linux api app
+  'api' // windows api app
+  'app,linux,container' // linux container app
+  'app,container,windows' // windows container app
+])
 param kind string = 'app,linux'
 
 @description('Optional. Enable/Disable usage telemetry for module.')
 param enableTelemetry bool = true
-
-@description('Optional. Resource ID of the user-assigned managed identity to be used by the Cognitive Services resource.')
-param userAssignedResourceId string = ''
 
 @description('Diagnostic settings for monitoring.')
 param diagnosticSettings array = []
@@ -59,6 +82,9 @@ import { privateEndpointSingleServiceType } from 'br/public:avm/utl/types/avm-co
 @description('Optional. Configuration details for private endpoints. For security reasons, it is recommended to use private endpoints whenever possible.')
 param privateEndpoints privateEndpointSingleServiceType[]?
 
+@description('Optional. Managed identities for the resource.')
+param managedIdentities object = { systemAssigned: true }
+
 @description('Optional. Enable end-to-end TLS encryption between the front end and worker. Requires Premium v2/v3 or Isolated v2 App Service Plan.')
 param e2eEncryptionEnabled bool = false
 
@@ -74,20 +100,22 @@ module appService 'br/public:avm/res/web/site:0.23.1' = {
     kind: kind
     enableTelemetry: enableTelemetry
     serverFarmResourceId: serverFarmResourceId
-    managedIdentities: {
-      systemAssigned: true, userAssignedResourceIds: !empty(userAssignedResourceId) ? [userAssignedResourceId] : []
-    }
+    managedIdentities: managedIdentities
     siteConfig: {
       alwaysOn: alwaysOn
       ftpsState: 'Disabled'
       linuxFxVersion: linuxFxVersion
       minTlsVersion: '1.2'
+      healthCheckPath: !empty(healthCheckPath) ? healthCheckPath : null
+      webSocketsEnabled: webSocketsEnabled
+      appCommandLine: appCommandLine
     }
     e2eEncryptionEnabled: e2eEncryptionEnabled
     configs: [
       {
         name: 'appsettings'
         properties: appSettings
+        applicationInsightResourceId: !empty(applicationInsightResourceId) ? applicationInsightResourceId : null
       }
       {
         name: 'logs'

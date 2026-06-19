@@ -15,17 +15,16 @@ param tags object = {}
 @description('Resource ID of the App Service Plan.')
 param serverFarmResourceId string
 
-@description('Name of the storage account.')
-param storageAccountName string = ''
-
-@description('Optional. The name of the application insights instance to use with the function app.')
-param applicationInsightsName string = ''
-
-@description('Managed identity configuration.')
-param managedIdentities object = { systemAssigned: true }
-
 @description('Optional. Docker image name to use for container function apps.')
 param dockerFullImageName string = ''
+
+@description('Name of the storage account.')
+param storageAccountName string
+
+@description('Managed identity configuration.')
+param managedIdentities object = {
+  systemAssigned: true
+}
 
 @description('App settings as name-value pairs (object).')
 param appSettings object = {}
@@ -43,19 +42,7 @@ param numberOfWorkers int = -1
 param use32BitWorkerProcess bool = false
 
 @description('Site configuration object.')
-param siteConfig object = {
-  alwaysOn: true
-  functionAppScaleLimit: functionAppScaleLimit != -1 ? functionAppScaleLimit : null
-  minimumElasticInstanceCount: minimumElasticInstanceCount != -1 ? minimumElasticInstanceCount : null
-  numberOfWorkers: numberOfWorkers != -1 ? numberOfWorkers : null
-  use32BitWorkerProcess: use32BitWorkerProcess
-  cors: {
-    allowedOrigins: []
-  }
-  healthCheckPath: ''
-  minTlsVersion: '1.2'
-  ftpsState: 'FtpsOnly'
-}
+param siteConfig object = {}
 
 @description('Runtime stack.')
 param runtimeStack string = 'python'
@@ -77,6 +64,9 @@ param e2eEncryptionEnabled bool = false
 
 @description('Optional. The client ID of the user assigned identity for the function app. This is required to set the AZURE_CLIENT_ID app setting so the function app can authenticate with the user assigned managed identity.')
 param userAssignedIdentityClientId string = ''
+
+@description('Optional. Resource ID of Application Insights for monitoring integration.')
+param applicationInsightResourceId string = ''
 
 // ============================================================================
 // Variables
@@ -100,6 +90,13 @@ var baseAppSettings = union({
 
 var mergedAppSettings = union(baseAppSettings, appSettings)
 
+var updatedSiteConfig = union(siteConfig, {
+  functionAppScaleLimit: functionAppScaleLimit != -1 ? functionAppScaleLimit : null
+  minimumElasticInstanceCount: minimumElasticInstanceCount != -1 ? minimumElasticInstanceCount : null
+  numberOfWorkers: numberOfWorkers != -1 ? numberOfWorkers : null
+  use32BitWorkerProcess: use32BitWorkerProcess
+})
+
 // ============================================================================
 // Function App (AVM)
 // ============================================================================
@@ -118,9 +115,7 @@ module functionApp 'br/public:avm/res/web/site:0.23.1' = {
       {
         name: 'appsettings'
         properties: mergedAppSettings
-        applicationInsightResourceId: empty(applicationInsightsName)
-          ? null
-          : resourceId('Microsoft.Insights/components', applicationInsightsName)
+        applicationInsightResourceId: !empty(applicationInsightResourceId) ? applicationInsightResourceId : null
         storageAccountResourceId: resourceId('Microsoft.Storage/storageAccounts', storageAccountName)
         storageAccountUseIdentityAuthentication: true
         retainCurrentAppSettings: true
@@ -128,7 +123,7 @@ module functionApp 'br/public:avm/res/web/site:0.23.1' = {
     ]
     siteConfig: union({
       linuxFxVersion: !empty(dockerFullImageName) ? 'DOCKER|${dockerFullImageName}' : '${toUpper(runtimeStack)}|${runtimeVersion}'
-    }, siteConfig)
+    }, updatedSiteConfig)
 
     clientAffinityEnabled: false
     httpsOnly: true

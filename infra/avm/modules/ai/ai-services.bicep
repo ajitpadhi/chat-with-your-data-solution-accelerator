@@ -69,8 +69,8 @@ param roleAssignments array = []
 @description('Optional. List of allowed FQDN.')
 param allowedFqdnList array?
 
-@description('Optional. Resource ID of the user-assigned managed identity to be used by the Cognitive Services resource.')
-param userAssignedResourceId string = ''
+@description('Optional. Managed identities for the resource.')
+param managedIdentities object = { systemAssigned: true }
 
 var effectiveSubDomain = !empty(customSubDomainName) ? customSubDomainName : name
 
@@ -93,9 +93,9 @@ module aiService 'br/public:avm/res/cognitive-services/account:0.14.2' = {
     sku: sku
     customSubDomainName: effectiveSubDomain
     disableLocalAuth: disableLocalAuth
-    managedIdentities: { systemAssigned: true, userAssignedResourceIds: !empty(userAssignedResourceId) ? [userAssignedResourceId] : [] }
+    managedIdentities: managedIdentities
     publicNetworkAccess: publicNetworkAccess
-    diagnosticSettings: diagnosticSettings
+    diagnosticSettings: !empty(diagnosticSettings) ? diagnosticSettings : []
     roleAssignments: !empty(roleAssignments) ? roleAssignments : []
     allowedFqdnList: allowedFqdnList
     networkAcls: {
