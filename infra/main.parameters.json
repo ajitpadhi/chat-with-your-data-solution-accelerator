@@ -3,182 +3,103 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "solutionName": {
-      "value": "${AZURE_ENV_NAME}"
+      "value": "${AZURE_ENV_SOLUTION_NAME=${AZURE_ENV_NAME}}"
+    },
+    "solutionUniqueText": {
+      "value": "${AZURE_ENV_UNIQUE_TEXT=}"
     },
     "location": {
       "value": "${AZURE_LOCATION}"
     },
-    "principal": {
-      "value": {
-        "id": "${PRINCIPAL_ID}",
-        "name": "${PRINCIPAL_NAME}",
-        "type": "${PRINCIPAL_TYPE=User}"
-      }
-    },
-    "appEnvironment": {
-      "value": "${APP_ENV=Prod}"
-    },
-    "hostingModel": {
-      "value": "${AZURE_APP_SERVICE_HOSTING_MODEL=code}"
-    },
-    "hostingPlanSku": {
-      "value": "${HOSTING_PLAN_SKU=B3}"
+    "azureAiServiceLocation": {
+      "value": "${AZURE_ENV_AI_SERVICE_LOCATION=${AZURE_LOCATION}}"
     },
     "databaseType": {
-      "value": "${DATABASE_TYPE=PostgreSQL}"
+      "value": "${AZURE_ENV_DATABASE_TYPE=cosmosdb}"
     },
-    "azureSearchUseIntegratedVectorization": {
-      "value": "${AZURE_SEARCH_USE_INTEGRATED_VECTORIZATION=false}"
+    "ingestionTrigger": {
+      "value": "${AZURE_ENV_INGESTION_TRIGGER=direct_enqueue}"
     },
-    "azureSearchUseSemanticSearch": {
-      "value": "${AZURE_SEARCH_USE_SEMANTIC_SEARCH=false}"
+    "gptModelName": {
+      "value": "${AZURE_ENV_GPT_MODEL_NAME=gpt-5.1}"
     },
-    "azureSearchSemanticSearchConfig": {
-      "value": "${AZURE_SEARCH_SEMANTIC_SEARCH_CONFIG=default}"
+    "gptModelVersion": {
+      "value": "${AZURE_ENV_GPT_MODEL_VERSION=2025-11-13}"
     },
-    "azureSearchIndexIsPrechunked": {
-      "value": "${AZURE_SEARCH_INDEX_IS_PRECHUNKED=false}"
+    "gptModelDeploymentType": {
+      "value": "${AZURE_ENV_GPT_MODEL_SKU=GlobalStandard}"
     },
-    "azureSearchSku": {
-      "value": "${AZURE_SEARCH_SKU=standard}"
+    "gptModelCapacity": {
+      "value": "${AZURE_ENV_GPT_MODEL_CAPACITY=150}"
     },
-    "azureSearchLocation": {
-      "value": "${AZURE_SEARCH_LOCATION}"
+    "embeddingModelName": {
+      "value": "${AZURE_ENV_EMBEDDING_MODEL_NAME=text-embedding-3-large}"
     },
-    "azureSearchEnableInDomain": {
-      "value": "${AZURE_SEARCH_ENABLE_IN_DOMAIN=true}"
+    "embeddingModelVersion": {
+      "value": "${AZURE_ENV_EMBEDDING_MODEL_VERSION=1}"
     },
-    "azureSearchFilenameColumn": {
-      "value": "${AZURE_SEARCH_FILENAME_COLUMN=filename}"
+    "embeddingModelDeploymentType": {
+      "value": "${AZURE_ENV_EMBEDDING_MODEL_SKU=Standard}"
     },
-    "azureSearchFilter": {
-      "value": "${AZURE_SEARCH_FILTER}"
+    "embeddingModelCapacity": {
+      "value": "${AZURE_ENV_EMBEDDING_MODEL_CAPACITY=100}"
     },
-    "azureSearchUrlColumn": {
-      "value": "${AZURE_SEARCH_URL_COLUMN=url}"
+    "azureOpenAiApiVersion": {
+      "value": "${AZURE_ENV_OPENAI_API_VERSION=2025-01-01-preview}"
     },
-    "azureSearchConversationLogIndex": {
-      "value": "${AZURE_SEARCH_CONVERSATION_LOG_INDEX=conversations}"
+    "azureAiAgentApiVersion": {
+      "value": "${AZURE_ENV_AI_AGENT_API_VERSION=2025-05-01}"
     },
-    "orchestrationStrategy": {
-      "value": "${ORCHESTRATION_STRATEGY=openai_function}"
+    "enableMonitoring": {
+      "value": "${AZURE_ENV_ENABLE_MONITORING=false}"
     },
-    "logLevel": {
-      "value": "${LOGLEVEL=INFO}"
+    "enableScalability": {
+      "value": "${AZURE_ENV_ENABLE_SCALABILITY=false}"
     },
-    "recognizedLanguages": {
-      "value": "${AZURE_SPEECH_RECOGNIZER_LANGUAGES=en-US,fr-FR,de-DE,it-IT}"
+    "enableRedundancy": {
+      "value": "${AZURE_ENV_ENABLE_REDUNDANCY=false}"
     },
-    "conversationFlow": {
-      "value": "${CONVERSATION_FLOW=custom}"
+    "enablePrivateNetworking": {
+      "value": "${AZURE_ENV_ENABLE_PRIVATE_NETWORKING=false}"
     },
-    "azureSearchFieldId": {
-      "value": "${AZURE_SEARCH_FIELDS_ID=id}"
+    "tags": {
+      "value": {}
     },
-    "azureSearchContentColumn": {
-      "value": "${AZURE_SEARCH_CONTENT_COLUMN=content}"
+    "createdBy": {
+      "value": "${AZURE_ENV_CREATED_BY=${AZURE_PRINCIPAL_ID}}"
     },
-    "azureSearchVectorColumn": {
-      "value": "${AZURE_SEARCH_CONTENT_VECTOR_COLUMN=content_vector}"
+    "postgresAdminPrincipalId": {
+      "value": "${AZURE_ENV_POSTGRES_ADMIN_PRINCIPAL_ID=${AZURE_PRINCIPAL_ID}}"
     },
-    "azureSearchTitleColumn": {
-      "value": "${AZURE_SEARCH_TITLE_COLUMN=title}"
+    "postgresAdminPrincipalName": {
+      "value": "${AZURE_ENV_POSTGRES_ADMIN_PRINCIPAL_NAME}"
     },
-    "azureSearchFieldsMetadata": {
-      "value": "${AZURE_SEARCH_FIELDS_METADATA=metadata}"
+    "postgresAdminPrincipalType": {
+      "value": "${AZURE_ENV_POSTGRES_ADMIN_PRINCIPAL_TYPE=User}"
     },
-    "azureSearchSourceColumn": {
-      "value": "${AZURE_SEARCH_SOURCE_COLUMN=source}"
+    "existingSearchName": {
+      "value": "${AZURE_ENV_EXISTING_SEARCH_NAME=}"
     },
-    "azureSearchTextColumn": {
-      "value": "${AZURE_SEARCH_TEXT_COLUMN=text}"
+    "searchServiceLocation": {
+      "value": "${AZURE_ENV_SEARCH_SERVICE_LOCATION=}"
     },
-    "azureSearchLayoutTextColumn": {
-      "value": "${AZURE_SEARCH_LAYOUT_TEXT_COLUMN=layoutText}"
+    "existingCosmosName": {
+      "value": "${AZURE_ENV_EXISTING_COSMOS_NAME=}"
     },
-    "azureSearchChunkColumn": {
-      "value": "${AZURE_SEARCH_CHUNK_COLUMN=chunk}"
+    "existingStorageName": {
+      "value": "${AZURE_ENV_EXISTING_STORAGE_NAME=}"
     },
-    "azureSearchOffsetColumn": {
-      "value": "${AZURE_SEARCH_OFFSET_COLUMN=offset}"
+    "existingEventGridTopicName": {
+      "value": "${AZURE_ENV_EXISTING_EVENT_GRID_TOPIC_NAME=}"
     },
-    "azureOpenAIApiVersion": {
-      "value": "${AZURE_OPENAI_API_VERSION=2024-02-01}"
+    "existingOpenAiName": {
+      "value": "${AZURE_ENV_EXISTING_OPENAI_NAME=}"
     },
-    "azureOpenAIModel": {
-      "value": "${AZURE_OPENAI_MODEL=gpt-4.1}"
+    "backendContainerRegistryHostname": {
+      "value": "${AZURE_CONTAINER_REGISTRY_ENDPOINT=}"
     },
-    "azureOpenAIModelName": {
-      "value": "${AZURE_OPENAI_MODEL_NAME=gpt-4.1}"
-    },
-    "azureOpenAIModelVersion": {
-      "value": "${AZURE_OPENAI_MODEL_VERSION=2025-04-14}"
-    },
-    "azureOpenAIModelCapacity": {
-      "value": "${AZURE_OPENAI_MODEL_CAPACITY=150}"
-    },
-    "azureOpenAISkuName": {
-      "value": "${AZURE_OPENAI_SKU_NAME=S0}"
-    },
-    "azureOpenAIStream": {
-      "value": "${AZURE_OPENAI_STREAM=true}"
-    },
-    "useAdvancedImageProcessing": {
-      "value": "${USE_ADVANCED_IMAGE_PROCESSING=false}"
-    },
-    "advancedImageProcessingMaxImages": {
-      "value": "${ADVANCED_IMAGE_PROCESSING_MAX_IMAGES=1}"
-    },
-    "azureOpenAIEmbeddingModel": {
-      "value": "${AZURE_OPENAI_EMBEDDING_MODEL=text-embedding-3-small}"
-    },
-    "azureOpenAIEmbeddingModelName": {
-      "value": "${AZURE_OPENAI_EMBEDDING_MODEL_NAME=text-embedding-3-small}"
-    },
-    "azureOpenAIEmbeddingModelVersion": {
-      "value": "${AZURE_OPENAI_EMBEDDING_MODEL_VERSION=1}"
-    },
-    "azureOpenAIEmbeddingModelCapacity": {
-      "value": "${AZURE_OPENAI_EMBEDDING_MODEL_CAPACITY=100}"
-    },
-    "azureSearchDimensions": {
-      "value": "${AZURE_SEARCH_DIMENSIONS=1536}"
-    },
-    "azureOpenAIMaxTokens": {
-      "value": "${AZURE_OPENAI_MAX_TOKENS=1000}"
-    },
-    "azureOpenAITemperature": {
-      "value": "${AZURE_OPENAI_TEMPERATURE=0}"
-    },
-    "azureOpenAITopP": {
-      "value": "${AZURE_OPENAI_TOP_P=1}"
-    },
-    "azureOpenAIStopSequence": {
-      "value": "${AZURE_OPENAI_STOP_SEQUENCE}"
-    },
-    "azureOpenAISystemMessage": {
-      "value": "${AZURE_OPENAI_SYSTEM_MESSAGE=You are an AI assistant that helps people find information.}"
-    },
-    "azureSearchTopK": {
-      "value": "${AZURE_SEARCH_TOP_K=5}"
-    },
-    "computerVisionLocation": {
-      "value": "${AZURE_COMPUTER_VISION_LOCATION}"
-    },
-    "computerVisionSkuName": {
-      "value": "${COMPUTER_VISION_SKU_NAME=S1}"
-    },
-    "computerVisionVectorizeImageApiVersion": {
-      "value": "${AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_API_VERSION=2024-02-01}"
-    },
-    "computerVisionVectorizeImageModelVersion": {
-      "value": "${AZURE_COMPUTER_VISION_VECTORIZE_IMAGE_MODEL_VERSION=2023-04-15}"
-    },
-    "existingLogAnalyticsWorkspaceId": {
-      "value": "${AZURE_ENV_LOG_ANALYTICS_WORKSPACE_ID}"
-    },
-    "appversion": {
-      "value": "${AZURE_IMAGE_TAG=latest_waf}"
+    "backendContainerImageTag": {
+      "value": "${AZURE_ENV_IMAGE_TAG=latest}"
     }
   }
 }
