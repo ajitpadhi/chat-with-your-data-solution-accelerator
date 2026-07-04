@@ -1,8 +1,4 @@
-"""Tests for `shared.tools.qa` (task #20d).
-
-Pillar: Stable Core
-Phase: 3
-"""
+"""Tests for `shared.tools.qa`."""
 
 from unittest.mock import AsyncMock
 
@@ -23,9 +19,7 @@ def _src(idx: int, content: str, **extra: object) -> SearchResult:
 
 def _make_llm(reply_text: str = "Grounded answer.") -> AsyncMock:
     llm = AsyncMock()
-    llm.chat = AsyncMock(
-        return_value=ChatMessage(role="assistant", content=reply_text)
-    )
+    llm.chat = AsyncMock(return_value=ChatMessage(role="assistant", content=reply_text))
     return llm
 
 

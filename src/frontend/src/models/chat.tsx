@@ -1,7 +1,4 @@
 /**
- * Pillar: Stable Core
- * Phase: 7 (Testing + Documentation)
- *
  * Wire shapes + chat-domain state types. Mirrors the conversation /
  * history / SSE surfaces in `src/backend/`:
  *
@@ -104,7 +101,7 @@ export interface ChatState {
    * Id of the citation the user most recently focused via an inline
    * `[docN]` answer-bubble token. `<CitationPanel>` reads this to
    * auto-expand the matching accordion item. `null` means no inline
-   * focus is active — the panel renders with all items collapsed.
+   * focus is active -- the panel renders with all items collapsed.
    * Cleared by future history navigation, conversation reset, or
    * an explicit user-driven panel close.
    */

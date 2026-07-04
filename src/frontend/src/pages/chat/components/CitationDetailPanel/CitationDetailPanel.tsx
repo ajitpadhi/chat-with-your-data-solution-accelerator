@@ -1,7 +1,4 @@
 /**
- * Pillar: Stable Core
- * Phase: 7 (Testing + Documentation)
- *
  * Source detail column shown to the right of the chat transcript when
  * the user clicks a reference chip. Reads the selected citation from
  * chat state and renders, top to bottom: a "Citations" header with a
@@ -9,7 +6,7 @@
  * (resolved by `deriveDocumentHref` from the citation's blob name or
  * URL, omitted when neither is usable), and the reference text
  * rendered through `<MarkdownContent>` so markdown in the snippet
- * becomes formatted HTML — without `rehype-raw`, so any embedded raw
+ * becomes formatted HTML -- without `rehype-raw`, so any embedded raw
  * HTML stays escaped and XSS-safe.
  *
  * The header, title, and deep-link form a pinned head; only the

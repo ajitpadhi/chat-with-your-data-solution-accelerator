@@ -1,12 +1,9 @@
 """Type-level invariants for `shared.types`.
 
-Pillar: Stable Core
-Phase: 2
-
-Locks the `OrchestratorChannel` `StrEnum` contract added in Q12
-(2026-05-05). The enum has to satisfy three properties at once so
-that the channel-literal sweep stays a *one-time* refactor instead of
-re-introducing drift the next time a producer is added:
+Locks the `OrchestratorChannel` `StrEnum` contract. The enum has to
+satisfy three properties at once so that the channel-literal sweep
+stays a *one-time* refactor instead of re-introducing drift the next
+time a producer is added:
 
 1. Frozen membership -- exactly the five locked channel keys, no
    more, no less.
@@ -264,7 +261,9 @@ def test_aad_scope_equality_is_member_distinct() -> None:
     """Each member equals its own raw scope value but not a sibling's
     -- so call sites that compare against a literal stay unambiguous."""
     assert AadScope.COGNITIVE_SERVICES == "https://cognitiveservices.azure.com/.default"
-    assert AadScope.POSTGRES_FLEX == "https://ossrdbms-aad.database.windows.net/.default"
+    assert (
+        AadScope.POSTGRES_FLEX == "https://ossrdbms-aad.database.windows.net/.default"
+    )
     assert AadScope.COGNITIVE_SERVICES != AadScope.POSTGRES_FLEX
 
 
@@ -281,14 +280,14 @@ def test_aad_scope_is_in_module_exports() -> None:
 
 
 # ---------------------------------------------------------------------------
-# RuntimeConfig (#35c-1)
+# RuntimeConfig
 # ---------------------------------------------------------------------------
 #
 # `RuntimeConfig` is the persisted shape of the admin-mutable subset
 # of `AppSettings` -- the same 6 fields that `AdminConfig` exposes as
-# read-only in #35b, plus two audit fields (`updated_at`,
+# read-only, plus two audit fields (`updated_at`,
 # `updated_by`). Lives in `shared.types` (not `backend.routers.admin`)
-# because both DB clients (Cosmos in #35c-4/5, Postgres in #35c-6)
+# because both DB clients (Cosmos and Postgres)
 # need to read/write it without depending on the backend package.
 #
 # Wire-shape decisions locked here:
@@ -309,7 +308,7 @@ def test_aad_scope_is_in_module_exports() -> None:
 def test_runtime_config_default_construction_is_all_unset() -> None:
     """All 6 mutable fields default to None so the persisted row
     distinguishes 'explicitly overridden' from 'not overridden' --
-    a precondition for the RFC 7396 merge semantics in #35c-7."""
+    a precondition for the RFC 7396 merge semantics."""
     rc = RuntimeConfig()
     assert rc.orchestrator_name is None
     assert rc.openai_temperature is None
@@ -349,7 +348,7 @@ def test_runtime_config_distinguishes_false_from_unset() -> None:
     is load-bearing: a PATCH that disables semantic search must
     persist as `False` (a real override), distinct from an unset
     field that means 'fall through to env default'. If this test
-    breaks, the merge semantics in #35c-7 collapse silently."""
+    breaks, the merge semantics collapse silently."""
     explicit_false = RuntimeConfig(search_use_semantic_search=False)
     unset = RuntimeConfig()
     assert explicit_false.search_use_semantic_search is False
@@ -398,7 +397,7 @@ def test_runtime_config_partial_override_leaves_other_fields_none() -> None:
 
 def test_runtime_config_content_safety_enabled_defaults_to_none() -> None:
     """`content_safety_enabled` joins the existing mutable fields with
-    the same `T | None = None` shape — None means 'no admin override,
+    the same `T | None = None` shape -- None means 'no admin override,
     fall through to `AppSettings.content_safety.enabled` at request
     time via `get_content_safety_guard`'."""
     rc = RuntimeConfig()
@@ -441,7 +440,7 @@ def test_runtime_config_content_safety_enabled_distinguishes_false_from_none() -
 
 def test_runtime_config_partial_override_preserves_content_safety_unset() -> None:
     """A partial override carrying only `content_safety_enabled` must
-    leave every other mutable field at None — mirrors the existing
+    leave every other mutable field at None -- mirrors the existing
     `test_runtime_config_partial_override_leaves_other_fields_none`
     pattern from the other direction."""
     rc = RuntimeConfig(content_safety_enabled=True)
@@ -456,7 +455,7 @@ def test_runtime_config_partial_override_preserves_content_safety_unset() -> Non
 
 def test_runtime_config_cwyd_agent_instructions_defaults_to_none() -> None:
     """`cwyd_agent_instructions` joins the existing mutable fields with
-    the same `T | None = None` shape — None means 'no admin override,
+    the same `T | None = None` shape -- None means 'no admin override,
     fall through to `CWYD_AGENT.instructions` at agent-creation time
     in the agents provider'."""
     rc = RuntimeConfig()
@@ -477,7 +476,7 @@ def test_runtime_config_cwyd_agent_instructions_round_trips() -> None:
 
 def test_runtime_config_partial_override_preserves_cwyd_agent_unset() -> None:
     """A partial override carrying only `cwyd_agent_instructions` must
-    leave every other mutable field at None — mirrors the existing
+    leave every other mutable field at None -- mirrors the existing
     partial-override tests for the other fields."""
     rc = RuntimeConfig(cwyd_agent_instructions="custom prompt")
     assert rc.cwyd_agent_instructions == "custom prompt"
@@ -492,8 +491,8 @@ def test_runtime_config_partial_override_preserves_cwyd_agent_unset() -> None:
 
 def test_runtime_config_is_in_module_exports() -> None:
     """Ensures `from backend.core.types import RuntimeConfig` works for
-    every downstream consumer (DB clients in #35c-4/5/6, admin
-    router in #35c-7) without a leading-underscore re-export."""
+    every downstream consumer (DB clients and admin
+    router) without a leading-underscore re-export."""
     assert "RuntimeConfig" in st.__all__
 
 

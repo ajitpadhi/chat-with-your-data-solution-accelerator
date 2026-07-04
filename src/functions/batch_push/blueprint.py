@@ -1,7 +1,4 @@
-"""Pillar: Stable Core
-Phase: 6 (Functions blueprints / modular RAG indexing pipeline)
-
-Queue-trigger blueprint that consumes ``batch_push`` messages and runs
+"""Queue-trigger blueprint that consumes ``batch_push`` messages and runs
 :func:`functions.batch_push.handler.batch_push_handler` once per
 message.
 
@@ -38,10 +35,9 @@ Registry-first collaborator wiring (Hard Rule #4):
 * Credentials provider via ``credentials_registry``.
 * Parser via ``ingestion_parsers_registry`` (key resolved from the
   blob filename extension; see :func:`_parser_key_for_filename`).
-* Embedder via ``embedders_registry`` -- the post-Phase-6 default key
+* Embedder via ``embedders_registry`` -- the default key
   is ``"azure_openai"`` (single concrete embedder today; an alternate
-  concrete would land in §4.6.1 and the lookup key would be lifted
-  to settings then).
+  concrete would lift the lookup key to settings).
 * Search write target via
   :func:`functions.core.search_resolution.resolve_search_provider`,
   which keys ``search_registry`` on ``settings.database.index_store``

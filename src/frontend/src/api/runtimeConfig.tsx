@@ -1,7 +1,4 @@
 /**
- * Pillar: Stable Core
- * Phase: 1 (Frontend → App Service build-from-source)
- *
  * Runtime backend-URL seam. The deployed SPA is a static bundle served
  * by an App Service; it learns the backend Container App origin at
  * runtime from `GET /config` (served by `frontend_app.py`) instead of

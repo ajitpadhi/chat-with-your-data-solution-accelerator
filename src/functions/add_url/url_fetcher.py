@@ -1,7 +1,4 @@
-"""Pillar: Stable Core
-Phase: 6 (Functions blueprints / modular RAG indexing pipeline)
-
-URL fetcher for the ``add_url`` blueprint.
+"""URL fetcher for the ``add_url`` blueprint.
 
 ``add_url`` is the HTTP-triggered counterpart to ``batch_push``:
 operators POST a URL, the blueprint downloads the page bytes, and
@@ -47,8 +44,8 @@ async def fetch_url(
     """Fetch ``url`` via httpx async GET and return the raw response body.
 
     Caller may inject an ``httpx.AsyncClient`` (mirrors the DI
-    contract of :func:`functions.batch_push.blob_fetcher.download_blob`
-    — the trigger owns the client lifecycle when it wants connection
+    contract of :func:`functions.batch_push.blob_fetcher.download_blob`,
+    the trigger owns the client lifecycle when it wants connection
     reuse across multiple URLs). When ``client`` is ``None`` the
     helper constructs a per-call client with ``follow_redirects=True``
     and the documented default timeout, then closes it on exit.

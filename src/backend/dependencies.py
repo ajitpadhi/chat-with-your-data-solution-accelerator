@@ -1,8 +1,5 @@
 """FastAPI dependency-injection wiring.
 
-Pillar: Stable Core
-Phase: 2
-
 Single source of truth for how routers obtain settings, credentials,
 and providers. Routers MUST go through `Depends(...)` -- no module-
 level singletons, no env-var reads inside route handlers.
@@ -77,9 +74,7 @@ def get_credential(request: Request) -> AsyncTokenCredential:
     """
     credential = getattr(request.app.state, "credential", None)
     if credential is None:
-        raise RuntimeError(
-            "credential missing on app.state -- lifespan did not run."
-        )
+        raise RuntimeError("credential missing on app.state -- lifespan did not run.")
     return credential
 
 
@@ -90,9 +85,7 @@ def get_llm_provider(request: Request) -> BaseLLMProvider:
     """Return the LLM provider stashed on `app.state` at startup."""
     provider = getattr(request.app.state, "llm_provider", None)
     if provider is None:
-        raise RuntimeError(
-            "llm_provider missing on app.state -- lifespan did not run."
-        )
+        raise RuntimeError("llm_provider missing on app.state -- lifespan did not run.")
     return provider
 
 
@@ -152,9 +145,7 @@ def get_agents_provider(request: Request) -> BaseAgentsProvider:
     return provider
 
 
-AgentsProviderDep = Annotated[
-    BaseAgentsProvider, Depends(get_agents_provider)
-]
+AgentsProviderDep = Annotated[BaseAgentsProvider, Depends(get_agents_provider)]
 
 
 def get_content_safety_guard(
@@ -211,7 +202,7 @@ ContentSafetyGuardDep = Annotated[
 
 
 # ---------------------------------------------------------------------------
-# #35e(a) -- Live-reload runtime overrides
+# Live-reload runtime overrides
 #
 # Lifespan loads the persisted ``RuntimeConfig`` from the database
 # once at startup and stashes the result on
@@ -241,9 +232,7 @@ def get_runtime_overrides(request: Request) -> RuntimeConfig | None:
     return getattr(request.app.state, "runtime_overrides", None)
 
 
-RuntimeOverridesDep = Annotated[
-    RuntimeConfig | None, Depends(get_runtime_overrides)
-]
+RuntimeOverridesDep = Annotated[RuntimeConfig | None, Depends(get_runtime_overrides)]
 
 
 def get_post_prompt_validator(

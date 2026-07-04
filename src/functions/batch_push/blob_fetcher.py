@@ -1,14 +1,11 @@
-"""Pillar: Stable Core
-Phase: 6 (Functions blueprints / modular RAG indexing pipeline)
-
-Blob fetcher for the ``batch_push`` blueprint.
+"""Blob fetcher for the ``batch_push`` blueprint.
 
 After :func:`functions.batch_push.queue_reader.parse_push_message`
 hands the consumer a validated :class:`BatchPushQueueMessage`,
 ``batch_push`` needs the actual blob bytes to feed the parser /
 chunker / embedder pipeline. This module owns only the download
 call; credentials provisioning, container-client construction, and
-the parse/chunk/embed/push composition land in follow-up units.
+the parse/chunk/embed/push composition are owned by the blueprint.
 
 Why bytes (not a stream): v1 piped the blob through
 ``EmbedderFactory.embed_file(file_sas, file_name)`` which fetched
@@ -21,7 +18,7 @@ large-blob hot path.
 
 C5 (functions try/except sweep): SDK boundary is wrapped per the
 policy in [v2/docs/exception_handling_policy.md] §"Functions
-blueprints" — narrow catch of ``azure.core.exceptions.AzureError``
+blueprints", narrow catch of ``azure.core.exceptions.AzureError``
 with structured ``logger.exception`` extras, then re-raise so the
 Functions runtime applies its retry / poison-queue semantics.
 """
@@ -46,7 +43,7 @@ async def download_blob(
 
     The extra key is ``blob_filename`` (not ``filename``) to avoid
     colliding with ``logging.LogRecord``'s reserved ``filename``
-    attribute — same convention as
+    attribute, same convention as
     :func:`functions.batch_start.queue_writer.enqueue_push_message`.
     """
     try:

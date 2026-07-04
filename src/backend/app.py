@@ -1,8 +1,5 @@
 """FastAPI app factory.
 
-Pillar: Stable Core
-Phase: 2
-
 Backend must boot headless (no frontend dependency). Telemetry is
 configured to export *directly* to Application Insights when
 `ObservabilitySettings.app_insights_connection_string` is set;
@@ -22,7 +19,9 @@ from typing import Any, AsyncGenerator
 
 from azure.ai.contentsafety.aio import ContentSafetyClient
 from azure.core.credentials_async import AsyncTokenCredential
-from azure.monitor.opentelemetry import configure_azure_monitor  # pyright: ignore[reportUnknownVariableType]
+from azure.monitor.opentelemetry import (
+    configure_azure_monitor,
+)  # pyright: ignore[reportUnknownVariableType]
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -71,9 +70,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         configure_azure_monitor(connection_string=conn_str)
         logger.info("Application Insights telemetry configured.")
     else:
-        logger.info(
-            "AZURE_APP_INSIGHTS_CONNECTION_STRING not set; telemetry disabled."
-        )
+        logger.info("AZURE_APP_INSIGHTS_CONNECTION_STRING not set; telemetry disabled.")
 
     cred_key = credentials_registry.select_default(settings.identity.uami_client_id)
     cred_provider = credentials_registry.registry.get(cred_key)(settings=settings)
@@ -93,9 +90,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     agents_provider = agents_registry.registry.get("foundry")(
         settings=settings,
         credential=credential,
-        runtime_overrides_getter=lambda: getattr(
-            app.state, "runtime_overrides", None
-        ),
+        runtime_overrides_getter=lambda: getattr(app.state, "runtime_overrides", None),
     )
 
     app.state.credential_provider = cred_provider
@@ -119,7 +114,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.database_client = database_client
     logger.info("Database client ready (%s).", settings.database.db_type)
 
-    # #35e(a): Live-reload runtime overrides. Load the persisted
+    # Live-reload runtime overrides. Load the persisted
     # `RuntimeConfig` once at startup so reads survive container
     # restarts -- the PATCH route reassigns this attribute on every
     # successful upsert, but cold start needs to seed it from the
@@ -235,10 +230,70 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="CWYD v2 backend",
         version="2.0.0",
+        description=(
+            "Backend API for Chat With Your Data v2: retrieval-augmented "
+            "chat over your own documents. Exposes health probes, the "
+            "streaming chat endpoint, conversation history, speech "
+            "configuration, RBAC-gated admin runtime config and document "
+            "ingestion, and source-file streaming."
+        ),
+        openapi_tags=[
+            {
+                "name": "health",
+                "description": (
+                    "Liveness and readiness probes for the backend. The "
+                    "diagnostic snapshot always returns 200; the readiness "
+                    "probe returns 503 when a required dependency is down, "
+                    "so orchestrators (ACA / AKS) can gate traffic."
+                ),
+            },
+            {
+                "name": "conversation",
+                "description": (
+                    "The chat endpoint. Runs the configured orchestrator "
+                    "over the request and either streams the reasoning / "
+                    "answer / citation feed as SSE or buffers a single JSON "
+                    "response, chosen by the request Accept header."
+                ),
+            },
+            {
+                "name": "history",
+                "description": (
+                    "Conversation history: list, create, rename, and delete "
+                    "conversations, append messages, and record per-message "
+                    "feedback for the signed-in user. Backed by the "
+                    "configured chat-history store (Cosmos DB or Postgres)."
+                ),
+            },
+            {
+                "name": "speech",
+                "description": (
+                    "Speech SDK configuration plus a freshly minted, "
+                    "short-lived AAD bearer token so the browser can run "
+                    "speech-to-text directly against Azure Speech."
+                ),
+            },
+            {
+                "name": "admin",
+                "description": (
+                    "RBAC-gated administration: read the runtime "
+                    "configuration and apply JSON Merge Patch overrides, and "
+                    "manage indexed documents (list, upload, URL ingest, "
+                    "delete, and reprocess-all)."
+                ),
+            },
+            {
+                "name": "files",
+                "description": (
+                    "Streams an indexed source-document blob back to the "
+                    "browser for inline rendering of citations."
+                ),
+            },
+        ],
         lifespan=_lifespan,
     )
 
-    # Sourced from typed `NetworkSettings.cors_origins` (CU-002b),
+    # Sourced from typed `NetworkSettings.cors_origins`,
     # which reads the bare `BACKEND_CORS_ORIGINS` env var via
     # `validation_alias`. Empty list -> wildcard, matching the legacy
     # behavior of the previous `os.getenv` default.

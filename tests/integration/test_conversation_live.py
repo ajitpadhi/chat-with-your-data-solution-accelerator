@@ -1,8 +1,5 @@
 """Live conversation checks (integration lane).
 
-Pillar: Stable Core
-Phase: 6
-
 Drives ``POST /api/conversation`` against the real orchestrator + real
 Foundry IQ / Azure Search over the in-process app boot (see
 ``conftest.live_app``). Assertions check behavioral invariants -- grounded
@@ -106,7 +103,7 @@ async def test_in_domain_citation_ids_use_normalized_docn_shape(
     """Citation ids + answer text converge on the ``[docN]`` shape, not native
     KB markers.
 
-    Regression guard for BUG-0030: the ``agent_framework`` path grounds via
+    Regression guard: the ``agent_framework`` path grounds via
     the server-side Foundry IQ Knowledge Base, whose model emits native
     ``【N:M†source】`` markers inline in the answer and citation ids keyed by a
     raw ``mcp://searchindex/<doc-key>``. ``normalize_kb_citations`` (wired into
@@ -114,8 +111,8 @@ async def test_in_domain_citation_ids_use_normalized_docn_shape(
     ``[docN]`` and renumbers the citation ids to match, so every citation id is
     ``[docN]`` and no native bracket survives into the answer text. The
     friendly *title* / *snippet* are not carried in the KB annotation (only the
-    raw doc-key), so title/snippet recovery is tracked separately under
-    BUG-0030 and is deliberately not asserted here.
+        raw doc-key), so title/snippet recovery is tracked separately
+        and is deliberately not asserted here.
     """
     response = await live_client.post(
         "/api/conversation", json=_user_turn(_IN_DOMAIN_QUERY)
@@ -132,9 +129,7 @@ async def test_in_domain_citation_ids_use_normalized_docn_shape(
     # No native KB marker (full-width brackets / dagger) survives into the
     # answer text -- inline references render as [docN], same as langgraph.
     content = body.get("content", "")
-    assert (
-        "【" not in content and "†" not in content and "】" not in content
-    ), content
+    assert "【" not in content and "†" not in content and "】" not in content, content
 
 
 @pytest.mark.parametrize(
@@ -149,7 +144,7 @@ async def test_reasoning_feed_streams_substantive_model_reasoning(
     """BOTH orchestrators stream substantive model reasoning beyond the
     canned KB narration -- with no configuration knob.
 
-    Honest live gate for the reasoning feed (BUG-0013): the plumbing was
+    Honest live gate for the reasoning feed: the plumbing was
     always wired, but no substantive content reached the thinking panel
     because the answer model was never asked for a reasoning summary.
     Each orchestrator now auto-detects whether the answer deployment
@@ -181,9 +176,7 @@ async def test_reasoning_feed_streams_substantive_model_reasoning(
         # Force the effective orchestrator deterministically: overwrite
         # the cosmos-loaded overrides so `resolve_effective_config`
         # resolves to the parametrized name on this request.
-        app.state.runtime_overrides = RuntimeConfig(
-            orchestrator_name=orchestrator_name
-        )
+        app.state.runtime_overrides = RuntimeConfig(orchestrator_name=orchestrator_name)
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
             transport=transport, base_url="http://integration"
@@ -202,9 +195,9 @@ async def test_reasoning_feed_streams_substantive_model_reasoning(
         for event in events
         if event.event == "reasoning"
     ]
-    assert reasoning_contents, (
-        f"[{orchestrator_name}] expected at least one reasoning frame"
-    )
+    assert (
+        reasoning_contents
+    ), f"[{orchestrator_name}] expected at least one reasoning frame"
     substantive = [
         text
         for text in reasoning_contents

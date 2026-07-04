@@ -1,4 +1,4 @@
-"""Pillar: Stable Core / Phase: 6 — tests for functions/core/storage_clients.py."""
+"""Pillar: Stable Core / Phase: 6 -- tests for functions/core/storage_clients.py."""
 
 from typing import Any
 from unittest.mock import patch
@@ -13,7 +13,9 @@ from functions.core.storage_clients import storage_clients
 class _FakeCredential:
     """Stand-in for an entered AsyncTokenCredential (SDK only inspects calls)."""
 
-    async def get_token(self, *scopes: str, **_: Any) -> Any:  # pragma: no cover - unused
+    async def get_token(
+        self, *scopes: str, **_: Any
+    ) -> Any:  # pragma: no cover - unused
         raise AssertionError("storage_clients should not request tokens itself")
 
     async def close(self) -> None:  # pragma: no cover - unused

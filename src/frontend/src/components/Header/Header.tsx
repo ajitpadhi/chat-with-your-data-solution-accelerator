@@ -1,13 +1,10 @@
 /**
- * Pillar: Stable Core
- * Phase: 4 (frontend polish — reference-architecture re-skin)
- *
  * Coral Header. Mirrors the reference architecture's
  * `commonComponents/components/Header/Header.tsx`:
  *   - Left brand: a clickable <Avatar shape="square" color="neutral">
  *     wrapping the multi-agent brand mark that navigates back to the
  *     home / chat view, followed by a "<title> | <subtitle>" label row.
- *   - Right tools: <HeaderTools> — Fluent <Toolbar> with new-chat, a
+ *   - Right tools: <HeaderTools> -- Fluent <Toolbar> with new-chat, a
  *     gated admin entry, history toggle, theme toggle. The admin pages
  *     are reached solely through that gated admin entry, so a non-admin
  *     session never sees a dead-end link.

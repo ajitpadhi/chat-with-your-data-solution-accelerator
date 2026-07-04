@@ -1,15 +1,11 @@
 /**
- * Pillar: Stable Core
- * Phase: 4 (frontend polish — reference-architecture re-skin) +
- *        7 (Testing + Documentation — error toast UX polish)
- *
  * Adapter that bridges our app-owned `<ThemeProvider>` (which persists
  * the active theme to `localStorage["cwyd.theme"]` and mirrors it to
  * `data-theme` on `<html>`) into Fluent UI v9's `<FluentProvider>`.
  *
  * Mounted as a child of `<ThemeProvider>` so it can read the active
  * theme via `useTheme()` and feed Fluent the matching theme object
- * (`teamsLightTheme` / `teamsDarkTheme`, mirroring the reference architecture).
+ * (`teamsLightTheme` / `teamsDarkTheme`).
  *
  * Keeping `themeContext` as the source of truth (not Fluent's own
  * scheme detection) means our toggle button + persistence keep

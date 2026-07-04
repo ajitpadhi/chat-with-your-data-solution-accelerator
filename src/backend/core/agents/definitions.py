@@ -1,8 +1,5 @@
 """AgentDefinition + built-in agents.
 
-Pillar: Stable Core
-Phase: 3
-
 `AgentDefinition` is a frozen Pydantic model -- the BUILTIN_AGENTS
 instances become effectively immutable singletons. Providers consume
 these objects; they do not mutate them.
@@ -18,10 +15,10 @@ Field choices:
 
 * `instructions` -- the system prompt. Foundry SDK uses the term
   `instructions`; we mirror it to avoid translation friction in the
-  provider (CU-010c).
+  provider.
 
 * `tools` -- opaque tool keys. The agent_framework orchestrator
-  (CU-010d) maps these into actual tool implementations; the
+  maps these into actual tool implementations; the
   definition stays implementation-free so a swap-in provider can
   interpret `tools` differently if it chooses.
 
@@ -114,9 +111,7 @@ def resolve_cwyd_instructions(override_text: str | None) -> str:
     affected.
     """
     body = (
-        override_text
-        if override_text and override_text.strip()
-        else CWYD_DEFAULT_BODY
+        override_text if override_text and override_text.strip() else CWYD_DEFAULT_BODY
     )
     return compose_cwyd_instructions(body)
 
@@ -135,7 +130,7 @@ CWYD_AGENT = AgentDefinition(
 
 # Reference-architecture pattern: a dedicated Foundry agent acting as
 # a TRUE/FALSE classifier on its own deployment. Used by the RAI gate
-# (CU-011b) to filter unsafe prompts before they reach CWYD_AGENT.
+# to filter unsafe prompts before they reach CWYD_AGENT.
 RAI_AGENT = AgentDefinition(
     name="rai",
     description=(

@@ -1,8 +1,4 @@
-"""Tests for the embedders provider domain (Phase 6 task #41, U8e).
-
-Pillar: Stable Core
-Phase: 6
-"""
+"""Tests for the embedders provider domain."""
 
 import importlib
 from typing import cast

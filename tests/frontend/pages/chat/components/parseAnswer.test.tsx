@@ -1,8 +1,8 @@
 /**
  * Pillar: Stable Core
- * Phase: 6 (visual polish)
+ * Phase: 6
  *
- * Vitest coverage for `parseAnswer()` — the pure transform that
+ * Vitest coverage for `parseAnswer()` -- the pure transform that
  * rewrites `[docN]` markers into `^K^` superscript tokens and returns
  * the deduplicated, renumbered citation subset the answer references.
  */

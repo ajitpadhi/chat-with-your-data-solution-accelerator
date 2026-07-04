@@ -1,11 +1,4 @@
 /**
- * Pillar: Stable Core
- * Phase: 5 (FE bridge — dev_plan §4 task #24, FE half) +
- *        4 (reference-architecture re-skin — composer pill: Fluent <Button>/<ToggleButton>
- *           replace hand-rolled SVG buttons; Send24Regular / Mic24Regular
- *           / MicOff24Regular replace inline SVG icons; surface uses
- *           Fluent tokens with a focus-ring border swap.)
- *
  * Controlled chat input wired to the backend SSE feed.
  *
  * On submit:
@@ -20,8 +13,7 @@
  * Citation frames are narrowed via the local `parseCitation` helper
  * before dispatch so a malformed wire payload (missing `id`) is
  * dropped at the boundary rather than corrupting reducer state. The
- * tool channel is still dropped \u2014 tool-step visualization is a
- * separate FE backlog item.
+ * tool channel is still dropped.
  *
  * Input + Send are disabled while a stream is in flight so the user
  * can't fire a second request mid-response. The mic toggle uses
@@ -60,7 +52,7 @@ function newId(): string {
 /**
  * Narrow a `citation` SSE frame's `metadata` payload into the typed
  * `Citation` shape. Returns `null` when the wire is missing the
- * required `id` field — without an id the reducer can't dedupe, and
+ * required `id` field -- without an id the reducer can't dedupe, and
  * a panel section with no source identifier has no anchor to link
  * to, so dropping is safer than rendering a half-built section.
  * Missing optional fields fall back to the same defaults Pydantic v2
@@ -99,10 +91,8 @@ export function MessageInput() {
   const [isStreaming, setIsStreaming] = useState(false);
   const speech = useSpeechRecognition();
 
-  // Snapshot of the draft at the moment the mic was pressed. While
-  // listening, the visible draft is `baseDraftRef.current` + a
-  // separator + the live transcript, so the user can dictate ON TOP of
-  // text they've already typed without losing it.
+  // Snapshot of the draft when the mic was pressed, so dictation appends
+  // on top of already-typed text instead of replacing it.
   const baseDraftRef = useRef("");
 
   // Holds the AbortController for the in-flight stream so the Cancel
@@ -150,7 +140,7 @@ export function MessageInput() {
       streaming: true,
     };
 
-    // Snapshot history BEFORE the dispatch — `state.messages` from this
+    // Snapshot history BEFORE the dispatch -- `state.messages` from this
     // closure is the pre-dispatch value, and we add the new user turn
     // ourselves to keep the wire payload aligned with what the user
     // actually saw on screen at submit time.
@@ -170,7 +160,7 @@ export function MessageInput() {
     try {
       for await (const ev of streamChat(history, {
         // Continue the active thread when one exists; `null` starts a
-        // fresh conversation — the backend mints the id and returns it
+        // fresh conversation -- the backend mints the id and returns it
         // on the terminal `conversation` control frame, surfaced via
         // `onConversationId` below.
         conversationId: state.conversationId,
@@ -227,14 +217,13 @@ export function MessageInput() {
             }
             break;
           }
-          // tool channel is intentionally dropped — tool-step
-          // visualization is a separate FE backlog item.
+          // tool channel is intentionally dropped.
         }
       }
       dispatch({ type: "finish_stream", id: assistantId });
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
-        // User-initiated cancel — keep whatever content streamed in,
+        // User-initiated cancel -- keep whatever content streamed in,
         // mark the message done, do NOT surface an error toast.
         dispatch({ type: "finish_stream", id: assistantId });
       } else {

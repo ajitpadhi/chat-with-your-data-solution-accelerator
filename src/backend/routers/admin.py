@@ -1,8 +1,5 @@
 """Admin router.
 
-Pillar: Stable Core
-Phase: 5 (admin surface)
-
 Operator surface for the v2 backend. Exposes:
 
 * ``GET /api/admin/status`` -- sanitized snapshot of the running
@@ -101,7 +98,17 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 # ---------------------------------------------------------------------------
 
 
-@router.get("/status", response_model=AdminStatus)
+@router.get(
+    "/status",
+    response_model=AdminStatus,
+    summary="Get runtime status",
+    description=(
+        "Return a sanitized runtime status snapshot: the effective "
+        "orchestrator (env default overlaid with any persisted override), "
+        "the configured database / index store, and enabled-feature flags. "
+        "Secrets are never surfaced."
+    ),
+)
 async def status_endpoint(
     settings: SettingsDep,
     overrides: RuntimeOverridesDep,
@@ -126,9 +133,7 @@ async def status_endpoint(
         db_type=settings.database.db_type,
         index_store=settings.database.index_store,
         environment=settings.environment,
-        foundry_project_endpoint_host=host_only(
-            settings.foundry.project_endpoint
-        ),
+        foundry_project_endpoint_host=host_only(settings.foundry.project_endpoint),
         gpt_deployment=settings.openai.gpt_deployment,
         embedding_deployment=settings.openai.embedding_deployment,
         search_enabled=bool(settings.search.endpoint),
@@ -138,16 +143,23 @@ async def status_endpoint(
     )
 
 
-@router.get("/config", response_model=AdminConfig)
+@router.get(
+    "/config",
+    response_model=AdminConfig,
+    summary="Get runtime config defaults",
+    description=(
+        "Return the read-only, runtime-toggleable subset of application "
+        "settings (env / code defaults). Mutations go through "
+        "PATCH /api/admin/config."
+    ),
+)
 async def config_endpoint(
     settings: SettingsDep,
     _user: UserIdDep,
 ) -> AdminConfig:
-    """Return the runtime-toggle subset of ``AppSettings`` (#35b).
+    """Return the runtime-toggle subset of ``AppSettings``.
 
-    Read-only. The mutating ``PATCH /api/admin/config`` lands in #35c
-    once the persistence target (database vs in-memory) is decided
-    -- see ``/memories/session/plan.md`` Q1.
+    Read-only. Mutations go through ``PATCH /api/admin/config``.
     """
     return AdminConfig(
         orchestrator_name=settings.orchestrator.name,
@@ -171,19 +183,28 @@ async def config_endpoint(
     )
 
 
-@router.get("/config/effective", response_model=EffectiveAdminConfig)
+@router.get(
+    "/config/effective",
+    response_model=EffectiveAdminConfig,
+    summary="Get effective runtime config",
+    description=(
+        "Return the effective runtime config: env defaults overlaid with "
+        "persisted overrides, plus per-field provenance (env vs override) "
+        "and audit metadata. Reflects saved PATCHes immediately."
+    ),
+)
 async def config_effective_endpoint(
     settings: SettingsDep,
     overrides: RuntimeOverridesDep,
     _user: UserIdDep,
 ) -> EffectiveAdminConfig:
     """Return env defaults overlaid with persisted overrides + per-field
-    provenance hints (#35e(b)).
+    provenance hints.
 
     Reads the override side via the live-reload channel
     (`get_runtime_overrides` -> `request.app.state.runtime_overrides`)
     seeded by the lifespan loader and refreshed by every successful
-    PATCH (#35e(a)), so this endpoint reflects PATCHes immediately
+    PATCH, so this endpoint reflects PATCHes immediately
     without a database round-trip.
     """
     # Env defaults -- same surface as `GET /api/admin/config`.
@@ -206,9 +227,7 @@ async def config_effective_endpoint(
         "post_answering_filter_message": DEFAULT_POST_ANSWERING_FILTER_MESSAGE,
     }
     merged: dict[str, Any] = dict(env_values)
-    sources: dict[str, ConfigSource] = {
-        name: ConfigSource.ENV for name in env_values
-    }
+    sources: dict[str, ConfigSource] = {name: ConfigSource.ENV for name in env_values}
     if overrides is not None:
         for name in env_values:
             override_value = getattr(overrides, name)
@@ -240,7 +259,7 @@ async def config_effective_endpoint(
 
 
 # ---------------------------------------------------------------------------
-# PATCH /api/admin/config -- runtime overrides (#35c-4)
+# PATCH /api/admin/config -- runtime overrides
 #
 # RFC 7396 JSON Merge Patch over the same 6-field surface as GET. The
 # merge is computed at the route layer (NOT pushed into the storage
@@ -248,14 +267,22 @@ async def config_effective_endpoint(
 # (`upsert_runtime_config` writes whatever it's given) -- mirrors the
 # `upsert_agent_id` precedent and keeps merge semantics tested in one
 # place. Live-reload of `app.state.settings` is **deliberately
-# deferred** -- see dev_plan #35c "Excluded" section. Operators
-# observe their PATCHes immediately in the response body and on the
-# next container restart; an effective-config GET that overlays the
-# overrides on env defaults lands in a separate row.
+# deferred**. Operators observe their PATCHes immediately in the
+# response body and on the next container restart.
 # ---------------------------------------------------------------------------
 
 
-@router.patch("/config", response_model=RuntimeConfig)
+@router.patch(
+    "/config",
+    response_model=RuntimeConfig,
+    summary="Patch runtime config",
+    description=(
+        "Apply an RFC 7396 JSON Merge Patch to the persisted runtime "
+        "config and return the merged shape. An explicit null clears an "
+        "override (reverting the field to its env default); an unknown key "
+        "or wrong-type value responds 422."
+    ),
+)
 async def patch_config_endpoint(
     request: Request,
     db: DatabaseClientDep,
@@ -325,7 +352,7 @@ async def patch_config_endpoint(
     # --- Read current overrides; default to a fresh RuntimeConfig on cold
     # start so the first-ever PATCH still goes through the merge path.
     # `before` keeps the raw fetch (None on first-ever PATCH) so the
-    # #35f(c) audit row can distinguish 'no prior override' from
+    # audit row can distinguish 'no prior override' from
     # 'all-cleared override'.
     before = await db.get_runtime_config()
     current = before or RuntimeConfig()
@@ -353,7 +380,7 @@ async def patch_config_endpoint(
         ) from exc
 
     await db.upsert_runtime_config(merged)
-    # #35e(a): Live-reload. Reassign `app.state.runtime_overrides` to
+    # Live-reload. Reassign `app.state.runtime_overrides` to
     # the same instance we just persisted so the next request's
     # `get_runtime_overrides` dependency surfaces the new override
     # without a container restart. Atomic Python attribute write --
@@ -361,7 +388,7 @@ async def patch_config_endpoint(
     # rebinds visible-or-not, never half-applied.
     request.app.state.runtime_overrides = merged
 
-    # #35f(c): Audit hook. Fire-and-forget append to the
+    # Audit hook. Fire-and-forget append to the
     # `admin_audit` log so a future forensic query can answer
     # who / what / before / after for every successful PATCH.
     # **Best-effort policy**: a failure here MUST NOT roll back
@@ -401,6 +428,13 @@ async def patch_config_endpoint(
     "/documents",
     response_model=ListDocumentsResponse,
     status_code=status.HTTP_200_OK,
+    summary="List indexed documents",
+    description=(
+        "List every distinct indexed source (filename or URL) with its "
+        "chunk count, sorted by source name. Returns an empty list when "
+        "nothing is indexed; responds 503 when no search backend is "
+        "configured."
+    ),
 )
 async def list_documents_endpoint(
     search: SearchProviderDep,
@@ -447,6 +481,12 @@ async def list_documents_endpoint(
     "/documents/{source:path}",
     response_model=DeleteDocumentResponse,
     status_code=status.HTTP_200_OK,
+    summary="Delete an indexed document",
+    description=(
+        "Remove a document's indexed chunks and its source blob so it "
+        "becomes fully unreachable. Responds 404 when neither existed and "
+        "503 when no search backend is configured."
+    ),
 )
 async def delete_document_endpoint(
     source: str,
@@ -529,6 +569,13 @@ async def delete_document_endpoint(
     "/documents/url",
     response_model=IngestUrlResponse,
     status_code=status.HTTP_200_OK,
+    summary="Ingest a document from a URL",
+    description=(
+        "Download the given URL, store its bytes as a blob, and index it "
+        "through the same pipeline as an uploaded file. Responds 422 on an "
+        "invalid URL and 503 when storage or the processing queue is not "
+        "configured."
+    ),
 )
 async def ingest_url_endpoint(
     body: IngestUrlRequest,
@@ -559,7 +606,10 @@ async def ingest_url_endpoint(
       (blob write, queue send) propagate to the app-level handlers in
       :mod:`backend.app`.
     """
-    if not settings.storage.documents_container or not settings.storage.doc_processing_queue:
+    if (
+        not settings.storage.documents_container
+        or not settings.storage.doc_processing_queue
+    ):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
@@ -586,6 +636,12 @@ async def ingest_url_endpoint(
     "/documents",
     response_model=UploadResponse,
     status_code=status.HTTP_200_OK,
+    summary="Upload a document",
+    description=(
+        "Upload a single document (multipart) and enqueue it for indexing. "
+        "Responds 413 when too large, 415 for an unsupported file type, "
+        "and 503 when storage / the processing queue is not configured."
+    ),
 )
 async def upload_document_endpoint(
     settings: SettingsDep,
@@ -624,9 +680,7 @@ async def upload_document_endpoint(
     try:
         validate_upload(filename, len(content), settings=settings)
     except UploadRejected as exc:
-        raise HTTPException(
-            status_code=exc.status_code, detail=exc.detail
-        ) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return await upload_document(
         filename=filename,
         content=content,
@@ -647,6 +701,13 @@ async def upload_document_endpoint(
     "/documents/reprocess",
     response_model=ReprocessResponse,
     status_code=status.HTTP_200_OK,
+    summary="Reprocess all documents",
+    description=(
+        "Re-fan every blob in the documents container onto the push queue "
+        "so all indexed documents are re-parsed, re-embedded, and "
+        "re-pushed. Responds 503 when storage / the processing queue is "
+        "not configured."
+    ),
 )
 async def reprocess_all_endpoint(
     settings: SettingsDep,
@@ -667,12 +728,13 @@ async def reprocess_all_endpoint(
     * Upstream ``AzureError`` (blob listing, queue send) propagates
       to the app-level handlers in :mod:`backend.app`.
     """
-    if not settings.storage.documents_container or not settings.storage.doc_processing_queue:
+    if (
+        not settings.storage.documents_container
+        or not settings.storage.doc_processing_queue
+    ):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=(
-                "Document storage is not configured for this deployment."
-            ),
+            detail=("Document storage is not configured for this deployment."),
         )
     return await reprocess_all(settings=settings, credential=credential)
 

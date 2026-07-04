@@ -1,6 +1,6 @@
 /**
  * Pillar: Stable Core
- * Phase: 5 (FE bridge — dev_plan §4 task #24, FE half)
+ * Phase: 5
  *
  * Vitest suite for the SSE client utility `streamChat()`. The util is
  * the only piece that talks to `POST /api/conversation` over
@@ -303,7 +303,7 @@ describe("streamChat", () => {
   });
 
   it("aborts mid-stream when the AbortSignal fires", async () => {
-    // Enqueue exactly one frame in `start`, then expose no `pull` —
+    // Enqueue exactly one frame in `start`, then expose no `pull` --
     // the reader's second `read()` call hangs forever until the signal
     // races it down via `streamChat`'s signal-aware read wrapper.
     let cancelled = false;
@@ -447,7 +447,7 @@ describe("streamChat", () => {
         'event: conversation\ndata: {"conversation_id":"conv-x"}\n\n',
       ]),
     );
-    // No onConversationId callback supplied — the frame is still dropped.
+    // No onConversationId callback supplied -- the frame is still dropped.
     const events = await collect(streamChat([]));
     expect(events).toEqual([
       { channel: "answer", content: "done", metadata: {} },

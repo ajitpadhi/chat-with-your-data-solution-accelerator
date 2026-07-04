@@ -1,7 +1,4 @@
-"""Tests for ``/api/speech`` router (S1 / SPEECH-MVP, Phase 4 polish).
-
-Pillar: Stable Core
-Phase: 4
+"""Tests for ``/api/speech`` router.
 
 Self-contained: builds a minimal FastAPI app from just the speech
 router so the test does not depend on B4's full app wiring.
@@ -19,7 +16,6 @@ from fastapi import FastAPI
 from backend.core.settings import SpeechSettings
 from backend.dependencies import get_app_settings, get_credential_provider
 from backend.routers import speech as speech_router
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -89,9 +85,7 @@ async def test_get_speech_returns_token_region_languages(
     comma-separated env value.
     """
     fake_mint = AsyncMock(return_value="speech-token-xyz")
-    monkeypatch.setattr(
-        "backend.routers.speech.mint_speech_token", fake_mint
-    )
+    monkeypatch.setattr("backend.routers.speech.mint_speech_token", fake_mint)
 
     app = _build_app(_settings_with_speech(), _StubCredentialProvider())
     async with _client(app) as client:
@@ -162,9 +156,7 @@ async def test_returns_502_when_aad_fails(
 ) -> None:
     monkeypatch.setattr(
         "backend.routers.speech.mint_speech_token",
-        AsyncMock(
-            side_effect=ClientAuthenticationError("UAMI not bound to workload")
-        ),
+        AsyncMock(side_effect=ClientAuthenticationError("UAMI not bound to workload")),
     )
     app = _build_app(_settings_with_speech(), _StubCredentialProvider())
     async with _client(app) as client:

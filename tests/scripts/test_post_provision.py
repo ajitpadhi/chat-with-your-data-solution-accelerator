@@ -1,6 +1,4 @@
 """
-Pillar: Stable Core
-Phase: 3 (Conversation + RAG, task #26)
 Purpose: Validate post_provision.py search-index bootstrap and CLI flags.
 """
 
@@ -53,7 +51,7 @@ class _FakeSearchIndexClient:
 
 
 def test_ensure_search_index_skips_when_endpoint_missing(monkeypatch, capsys):
-    # AZURE_AI_SEARCH_ENDPOINT not set — postgresql-mode deploy.
+    # AZURE_AI_SEARCH_ENDPOINT not set -- postgresql-mode deploy.
     sentinel = {"called": False}
 
     def factory():
@@ -108,7 +106,7 @@ def test_ensure_search_index_creates_when_missing(monkeypatch):
     assert result == "created"
     assert len(fake.created) == 1
     created = fake.created[0]
-    # SearchIndex object surface — name + a vector field of right dims.
+    # SearchIndex object surface -- name + a vector field of right dims.
     assert created.name == post_provision.DEFAULT_INDEX_NAME
     vector_field = next(f for f in created.fields if f.name == "content_vector")
     assert vector_field.vector_search_dimensions == 768
@@ -546,10 +544,10 @@ def test_ensure_search_index_rejects_bad_dimensions(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Agent registry bootstrap (CU-010b3 -- no-op closure)
+# Agent registry bootstrap (no-op closure)
 # ---------------------------------------------------------------------------
 #
-# CU-010b3 deliberately makes NO change to post_provision.py. The agent
+# post_provision.py deliberately makes NO change here. The agent
 # registry is bootstrapped lazily by the per-backend client:
 #   * Cosmos: reuses the chat-history container; agent rows just use
 #     `userId="_system"` + `type=CosmosItemType.AGENT` (no DDL needed).
@@ -582,7 +580,7 @@ def test_post_provision_does_not_reference_agent_partition() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Public network access re-assert (BUG-0093 / MACAE parity)
+# Public network access re-assert (MACAE parity)
 # ---------------------------------------------------------------------------
 
 

@@ -1,8 +1,5 @@
 """Azure AI Search-backed provider.
 
-Pillar: Stable Core
-Phase: 3
-
 Wraps `azure.search.documents.aio.SearchClient`. Hybrid retrieval:
 free-text query is always sent; an optional `vector` enables
 hybrid (text + vector) scoring. Semantic re-ranking is enabled
@@ -46,11 +43,10 @@ from backend.core.types import SearchDocument, SearchResult
 from .registry import registry
 from .base import BaseSearch, SourceListing
 
-
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Try/except policy (Phase C2d)
+# Try/except policy
 #
 # Per v2/docs/exception_handling_policy.md (Provider entry-points + Lifespan
 # rows): every `azure.search.documents.aio.SearchClient` call at the
@@ -183,7 +179,9 @@ class AzureSearch(BaseSearch):
         try:
             paged = cast(
                 AsyncIterable[dict[str, Any]],
-                await client.search(**kwargs),  # pyright: ignore[reportUnknownMemberType]
+                await client.search(
+                    **kwargs
+                ),  # pyright: ignore[reportUnknownMemberType]
             )
             async for doc in paged:
                 results.append(self._to_result(doc))

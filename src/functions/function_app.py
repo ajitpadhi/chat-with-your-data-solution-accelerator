@@ -1,7 +1,4 @@
-"""Pillar: Stable Core
-Phase: 6 (Functions blueprints / modular RAG indexing pipeline)
-
-Modular RAG indexing pipeline host. Registers the ingestion
+"""Modular RAG indexing pipeline host. Registers the ingestion
 blueprint set: :mod:`functions.batch_start`, :mod:`functions.batch_push`,
 :mod:`functions.add_url`, :mod:`functions.blob_event`, and
 :mod:`functions.search_skill`.
@@ -60,7 +57,7 @@ def _health_payload() -> HealthPayload:
 @app.function_name(name="health")
 @app.route(route="health", methods=["GET"])
 def health(req: func.HttpRequest) -> func.HttpResponse:
-    """GET /api/health — liveness probe for the Functions container."""
+    """GET /api/health: liveness probe for the Functions container."""
     return func.HttpResponse(
         body=_health_payload().model_dump_json(),
         status_code=200,

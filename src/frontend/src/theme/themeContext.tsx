@@ -1,15 +1,10 @@
 /**
- * Pillar: Stable Core
- * Phase: 6 (frontend polish, pulled forward for boss demo)
- *
  * Light/dark theme primitive for the v2 frontend. Owns:
  *   - the active theme (`"light" | "dark"`),
  *   - localStorage persistence (key `cwyd.theme`),
  *   - mirroring the value to `document.documentElement.dataset.theme`
  *     so `tokens.css` can switch CSS custom properties via the
  *     `[data-theme="dark"]` selector.
- *
- * v1 had no theme toggle; this is a deliberate v2 differentiator.
  */
 import {
   createContext,
@@ -62,7 +57,7 @@ export function ThemeProvider({
     try {
       window.localStorage.setItem(STORAGE_KEY, theme);
     } catch {
-      // localStorage unavailable (private mode, etc.) — non-fatal.
+      // localStorage unavailable (private mode, etc.) -- non-fatal.
     }
   }, [theme]);
 

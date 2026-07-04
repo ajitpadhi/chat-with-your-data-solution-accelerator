@@ -1,8 +1,4 @@
-"""Tests for the health router (Phase 2 task #13).
-
-Pillar: Stable Core
-Phase: 2
-"""
+"""Tests for the health router."""
 
 from enum import StrEnum
 from unittest.mock import AsyncMock, MagicMock
@@ -30,7 +26,6 @@ from backend.models.health import (
 )
 from backend.services.health import _aggregate
 
-
 # ---------------------------------------------------------------------------
 # CheckStatus / OverallStatus -- StrEnum structural tests (Hard Rule #11)
 # ---------------------------------------------------------------------------
@@ -54,7 +49,9 @@ def test_overall_status_is_strenum_subclassing_str() -> None:
         (CheckStatus.SKIP, "skip"),
     ],
 )
-def test_check_status_members_have_expected_values(member: CheckStatus, value: str) -> None:
+def test_check_status_members_have_expected_values(
+    member: CheckStatus, value: str
+) -> None:
     assert member.value == value
     assert str(member) == value
 
@@ -220,7 +217,9 @@ async def test_health_returns_200_when_all_checks_pass(
 ) -> None:
     monkeypatch.delenv("AZURE_ENVIRONMENT", raising=False)
     app = _build_app(COSMOS_ENV, monkeypatch)
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
         r = await ac.get("/api/health")
     assert r.status_code == 200
     body = r.json()
@@ -236,7 +235,9 @@ async def test_health_reports_fail_when_foundry_endpoint_missing(
 ) -> None:
     env = {k: v for k, v in COSMOS_ENV.items() if k != "AZURE_AI_PROJECT_ENDPOINT"}
     app = _build_app(env, monkeypatch)
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
         r = await ac.get("/api/health")
     assert r.status_code == 200  # diagnostic endpoint always 200
     body = r.json()
@@ -252,7 +253,9 @@ async def test_health_reports_fail_when_search_endpoint_missing(
 ) -> None:
     env = {k: v for k, v in COSMOS_ENV.items() if k != "AZURE_AI_SEARCH_ENDPOINT"}
     app = _build_app(env, monkeypatch)
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
         r = await ac.get("/api/health")
     body = r.json()
     assert body["status"] == "fail"
@@ -273,7 +276,8 @@ async def test_health_skip_does_not_degrade_overall_status(
         **{
             k: v
             for k, v in COSMOS_ENV.items()
-            if k not in {
+            if k
+            not in {
                 "AZURE_DB_TYPE",
                 "AZURE_COSMOS_ENDPOINT",
                 "AZURE_INDEX_STORE",
@@ -285,7 +289,9 @@ async def test_health_skip_does_not_degrade_overall_status(
         "AZURE_POSTGRES_ENDPOINT": "postgresql://pg-cwyd001.postgres.database.azure.com:5432/cwyd?sslmode=require",
     }
     app = _build_app(env, monkeypatch)
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
         r = await ac.get("/api/health")
     body = r.json()
     assert body["status"] == "pass"
@@ -300,7 +306,9 @@ async def test_health_response_model_shape(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app = _build_app(COSMOS_ENV, monkeypatch)
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
         r = await ac.get("/api/health")
     body = r.json()
     assert set(body.keys()) == {"status", "version", "checks"}
@@ -318,7 +326,9 @@ async def test_ready_returns_200_when_all_checks_pass(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app = _build_app(COSMOS_ENV, monkeypatch)
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
         r = await ac.get("/api/health/ready")
     assert r.status_code == 200
     assert r.json()["status"] == "pass"
@@ -330,14 +340,16 @@ async def test_ready_returns_503_when_dependency_fails(
 ) -> None:
     env = {k: v for k, v in COSMOS_ENV.items() if k != "AZURE_AI_PROJECT_ENDPOINT"}
     app = _build_app(env, monkeypatch)
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
         r = await ac.get("/api/health/ready")
     assert r.status_code == 503
     assert r.json()["status"] == "fail"
 
 
 # ---------------------------------------------------------------------------
-# DI wiring smoke tests (task #14)
+# DI wiring smoke tests
 # ---------------------------------------------------------------------------
 
 
@@ -375,7 +387,7 @@ def test_get_llm_provider_raises_when_lifespan_did_not_run(
 
 
 # ---------------------------------------------------------------------------
-# Lifespan wiring (task #14 + D1 lifecycle fix)
+# Lifespan wiring
 # ---------------------------------------------------------------------------
 
 
@@ -404,7 +416,7 @@ async def test_lifespan_populates_app_state_and_closes_on_shutdown(
     fake_llm_provider = MagicMock(spec=BaseLLMProvider)
     fake_llm_provider.aclose = AsyncMock()
 
-    # #35e(a): lifespan now calls `database_client.get_runtime_config()`
+    # lifespan calls `database_client.get_runtime_config()`
     # to load persisted RuntimeConfig overrides. Stub the databases registry
     # so the call returns a no-op mock instead of attempting a real
     # Cosmos round-trip.
@@ -435,9 +447,7 @@ async def test_lifespan_populates_app_state_and_closes_on_shutdown(
     )
     fake_agents_registry = MagicMock(name="agents_registry")
     fake_agents_registry.get.return_value = lambda **_kw: fake_agents
-    monkeypatch.setattr(
-        "backend.app.agents_registry.registry", fake_agents_registry
-    )
+    monkeypatch.setattr("backend.app.agents_registry.registry", fake_agents_registry)
 
     app = create_app()
     async with _lifespan(app):

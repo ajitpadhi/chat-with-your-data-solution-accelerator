@@ -1,8 +1,4 @@
-"""Tests for `backend.core.speech` (S1 / SPEECH-MVP, Phase 4 polish).
-
-Pillar: Stable Core
-Phase: 4
-"""
+"""Tests for `backend.core.speech`."""
 
 import logging
 from typing import Any
@@ -13,7 +9,6 @@ from azure.core.exceptions import ClientAuthenticationError
 
 from backend.core.settings import SpeechSettings
 from backend.core.speech import mint_speech_token
-
 
 # ---------------------------------------------------------------------------
 # Helpers

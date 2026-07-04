@@ -1,8 +1,4 @@
-"""Admin router request/response models.
-
-Pillar: Stable Core
-Phase: 5 (admin surface request/response models)
-"""
+"""Admin router request/response models."""
 
 from enum import StrEnum
 from uuid import uuid4
@@ -34,10 +30,10 @@ class ConfigSource(StrEnum):
 
 
 class AdminConfig(BaseModel):
-    """Runtime-toggle subset of ``AppSettings`` (read-only view, #35b).
+    """Runtime-toggle subset of ``AppSettings`` (read-only view).
 
-    The fields exposed here are exactly the settings that #35c lets
-    admins mutate at runtime. Selection criteria:
+    The fields exposed here are exactly the settings that the admin
+    PATCH endpoint mutates at runtime. Selection criteria:
 
     * **Not infra-pinned.** ``orchestrator.name`` lives under the
       ``CWYD_`` namespace precisely so the admin UI can flip it without
@@ -244,9 +240,7 @@ class UploadResponse(BaseModel):
     every downstream log line.
     """
 
-    filename: str = Field(
-        ..., description="Echo of the uploaded filename."
-    )
+    filename: str = Field(..., description="Echo of the uploaded filename.")
     blob_path: str = Field(
         ...,
         description=(
@@ -301,12 +295,12 @@ class ReprocessResponse(BaseModel):
 
 
 class EffectiveAdminConfig(BaseModel):
-    """Merged effective view of `AdminConfig` (#35e(b)).
+    """Merged effective view of `AdminConfig`.
 
     Combines the env-default snapshot returned by
     ``GET /api/admin/config`` with the persisted `RuntimeConfig`
     overrides loaded into ``app.state.runtime_overrides`` by the
-    lifespan + PATCH writeback channel from #35e(a). Each field on
+    lifespan + PATCH writeback channel. Each field on
     `values` is resolved by the rule:
 
     * Override field is `None` (the cold default and the post-clear

@@ -1,7 +1,4 @@
 /**
- * Pillar: Stable Core
- * Phase: 7 (Testing + Documentation)
- *
  * Source references surfaced under a finished assistant message.
  * Renders a collapsible reference block that mirrors the v1 chat
  * appearance: a single "N references" / "1 reference" toggle (with a
@@ -32,7 +29,7 @@ export interface CitationPanelProps {
   /**
    * Invoked with the full citation when the user clicks a reference
    * chip. The parent decides what to show (typically the source
-   * detail column) — the panel itself does not expand inline.
+   * detail column) -- the panel itself does not expand inline.
    */
   onSelectCitation: (citation: Citation) => void;
 }
@@ -52,7 +49,7 @@ const CITATION_LABEL_EDGE = 20;
 /**
  * Middle-truncate a chip label so a long filename stays on one line
  * while keeping its meaningful tail (e.g. the `.pdf - Part 1` suffix)
- * visible — mirrors the v1 `createCitationFilepath` head/tail elision.
+ * visible -- mirrors the v1 `createCitationFilepath` head/tail elision.
  * Labels at or under the threshold pass through verbatim.
  */
 export function formatCitationLabel(label: string): string {

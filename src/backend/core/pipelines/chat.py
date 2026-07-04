@@ -1,13 +1,10 @@
 """Chat pipeline.
 
-Pillar: Stable Core
-Phase: 3
-
 Pure async generator that wraps the chat flow:
 
     user messages
       → content-safety pre-screen (optional)        ← ContentSafetyGuard (Azure REST)
-      → RAI agent classifier pre-screen (optional)  ← rai_check (Foundry agent, CU-011a)
+      → RAI agent classifier pre-screen (optional)  ← rai_check (Foundry agent)
       → orchestrator.run()
       → post-prompt groundedness validation (optional)
       → SSE-channel events (ADR 0007)
@@ -51,7 +48,7 @@ Behavior contracts
   validated, then emitted as a single ``answer`` event whose content
   is either the original answer (grounded) or the validator's filter
   message (not grounded). Citations / reasoning / tool events stream
-  through as they arrive — only ``answer`` is buffered.
+  through as they arrive, only ``answer`` is buffered.
 * **No validator**: ``answer`` events stream through unchanged
   (sub-second perceived latency for the streaming client).
 """
@@ -178,7 +175,9 @@ async def run_chat(
                 seen_citation_ids.add(cid)
                 try:
                     citations.append(Citation(**event.metadata))
-                except Exception as exc:  # noqa: BLE001 -- malformed metadata is non-fatal
+                except (
+                    Exception
+                ) as exc:  # noqa: BLE001 -- malformed metadata is non-fatal
                     # Per v2/docs/exception_handling_policy.md "Pipelines" row:
                     # the citation metadata schema can drift across orchestrator
                     # versions (extra keys, wrong types). The cited document is

@@ -1,8 +1,8 @@
 /**
  * Pillar: Stable Core
- * Phase: 6 (visual polish)
+ * Phase: 6
  *
- * Unit tests for `formatReasoning` — the single shared formatter both
+ * Unit tests for `formatReasoning` -- the single shared formatter both
  * orchestrators' reasoning feeds flow through. The langgraph delta
  * stream (no section titles) must pass through verbatim; the
  * agent_framework block stream (bold section titles) must have its

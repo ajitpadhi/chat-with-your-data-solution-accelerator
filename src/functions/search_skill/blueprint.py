@@ -1,7 +1,4 @@
-"""Pillar: Stable Core
-Phase: 6 (Functions blueprints / modular RAG indexing pipeline)
-
-HTTP blueprint that exposes the ``search_skill`` embed-on-the-fly
+"""HTTP blueprint that exposes the ``search_skill`` embed-on-the-fly
 handler from :mod:`functions.search_skill.handler` as
 ``POST /api/search_skill``.
 
@@ -35,9 +32,9 @@ Trigger contract:
 Registry-first collaborator wiring (Hard Rule #4):
 
 * Credentials provider via ``credentials_registry``.
-* Embedder via ``embedders_registry`` -- post-Phase-6 default key
+* Embedder via ``embedders_registry`` -- default key
   ``"azure_openai"`` (single concrete embedder today; promoted to
-  settings when an alternate concrete lands).
+  settings if an alternate concrete is added).
 
 No parser is resolved -- ``search_skill`` is the embed-on-the-fly
 path: each input record already carries its chunk text, so the
@@ -86,9 +83,7 @@ async def _execute(
             await embedder.aclose()
 
 
-@bp.route(
-    route="search_skill", methods=["POST"], auth_level=func.AuthLevel.ANONYMOUS
-)
+@bp.route(route="search_skill", methods=["POST"], auth_level=func.AuthLevel.ANONYMOUS)
 @map_function_exceptions("search_skill")
 async def search_skill(req: func.HttpRequest) -> func.HttpResponse:
     """POST /api/search_skill -- embed every input record's text on the fly.

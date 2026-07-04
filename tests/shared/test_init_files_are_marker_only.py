@@ -1,8 +1,5 @@
 """AST invariant: every `__init__.py` under `v2/` is a package marker only.
 
-Pillar: Stable Core
-Phase: 4 (cleanup audit follow-on, IA-C1)
-
 Per `.github/copilot-instructions.md` Hard Rule #13 (codified 2026-05-20,
 finalised 2026-05-26 after IA-B1..IA-B8): an `__init__.py` is a package
 marker. The *only* permitted content is the module docstring (which
@@ -12,13 +9,13 @@ This test walks every `*__init__.py*` under `src/` and `tests/`
 (excluding `.venv/`, `__pycache__/`, and build artefacts) and asserts
 the AST body is one of:
 
-1. **Empty** — zero top-level nodes.
-2. **Docstring-only** — exactly one top-level node, of shape
+1. **Empty** -- zero top-level nodes.
+2. **Docstring-only** -- exactly one top-level node, of shape
    `ast.Expr(value=ast.Constant(value=str))`.
 
-Anything else — a stray `pass`, an `import`, an assignment, a class /
+Anything else -- a stray `pass`, an `import`, an assignment, a class /
 function definition, a `Registry(...)` instantiation, an `__all__`
-list — fails the test with the file path, offending node line, and
+list -- fails the test with the file path, offending node line, and
 the AST node type for diagnostic clarity.
 
 Displaced code goes to a sibling module: see dev_plan §2.4.4 ("Where
@@ -146,6 +143,5 @@ def test_scan_actually_walked_files() -> None:
         "no `__init__.py` files found under src/ -- path resolution " "likely broken"
     )
     assert "tests" in rel_parts, (
-        "no `__init__.py` files found under tests/ -- path resolution "
-        "likely broken"
+        "no `__init__.py` files found under tests/ -- path resolution " "likely broken"
     )

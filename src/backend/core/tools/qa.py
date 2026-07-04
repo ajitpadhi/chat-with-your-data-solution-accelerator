@@ -1,8 +1,5 @@
 """Question-answering helper (RAG composition).
 
-Pillar: Stable Core
-Phase: 3
-
 Composes a `BaseSearch` retriever and a `BaseLLMProvider` into a single
 async `answer()` call: query -> retrieve -> prompt -> answer + cited
 sources.
@@ -14,9 +11,9 @@ v2 differences vs v1 `QuestionAnswerTool`:
 - Returns a typed `QAResult` -- the answer string plus the
   `SearchResult`s used as context. Citation rendering is the caller's
   job.
-- No image / vision branch and no few-shot example block. Those were
-  v1 admin-config features; if Phase 5 brings them back they slot in
-  as a subclass override of `_compose_messages()`.
+- No image / vision branch and no few-shot example block. Such
+  extensions would slot in as a subclass override of
+  `_compose_messages()`.
 
 NOT a registry domain. Tools are imported directly:
 
@@ -30,7 +27,6 @@ from pydantic import BaseModel, Field
 from backend.core.providers.llm.base import BaseLLMProvider
 from backend.core.providers.search.base import BaseSearch
 from backend.core.types import ChatMessage, ChatRole, SearchResult
-
 
 # Default Azure-OpenAI-On-Your-Data-style prompts. The system message
 # pins behaviour to the supplied sources; the user template surfaces

@@ -1,16 +1,12 @@
 // ========================================================================
-// Pillar:  Stable Core
-// Phase:   1 (Infrastructure + Project Skeleton)
-// Purpose: Microsoft Foundry Project — child of an AI Services account
+// Purpose: Microsoft Foundry Project -- child of an AI Services account
 //          with `allowProjectManagement=true`. The Project endpoint is
 //          what the Agent Framework orchestrator (and Foundry IQ
 //          knowledge bases) bind to. The same parent account also
 //          serves the OpenAI-compatible endpoint used by LangGraph, so
 //          a single Project supports BOTH orchestrators.
 //
-//          Adapted from Microsoft Multi-Agent Custom Automation Engine
-//          (read-only architectural reference). No AVM module exists
-//          for projects/connections at the time of writing, so we
+//          No AVM module exists for Foundry projects/connections, so we
 //          declare the raw resources here.
 // ========================================================================
 

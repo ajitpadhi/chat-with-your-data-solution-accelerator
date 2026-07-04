@@ -1,8 +1,5 @@
 """Content safety guardrail.
 
-Pillar: Stable Core
-Phase: 3
-
 Two parallel safety seams live in this module, by design:
 
 1. `ContentSafetyGuard` -- thin async wrapper around Azure AI Content
@@ -55,10 +52,6 @@ DEFAULT_SEVERITY_THRESHOLD = 4
 # seeking request and FALSE means it must be blocked. Any other
 # response (refusal, empty, or unparseable text) is treated as
 # unsafe -- fail-closed is the only safe default for a guard.
-#
-# Note: cleanup_audit.md CU-011a prose says "verdict starts with
-# `FALSE`" -- that's a typo. The agent's own instructions are the
-# source of truth and `RAI_AGENT.instructions` says TRUE = safe.
 _RAI_SAFE_PREFIX = "TRUE"
 
 

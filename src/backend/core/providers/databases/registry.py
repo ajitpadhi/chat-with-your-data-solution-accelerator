@@ -1,8 +1,5 @@
 """Databases provider registry (single plug-point).
 
-Pillar: Stable Core
-Phase: 4
-
 Holds the `Registry[type[BaseDatabaseClient]]` instance + eager
 side-effect imports of `cosmosdb` and `postgres` (which call
 `@registry.register(...)` at import time).
@@ -17,7 +14,7 @@ Caller pattern (Hard Rule #13):
 
 The registry key must match `settings.database.db_type`
 (`Literal["cosmosdb", "postgresql"]`) so dispatch is registry-only
-(Hard Rule #4 — no name-string translation in the caller).
+(Hard Rule #4, no name-string translation in the caller).
 """
 
 # pyright: reportUnusedImport=false

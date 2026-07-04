@@ -1,14 +1,11 @@
-/* Pillar: Stable Core
-   Phase: 4 (frontend polish — reference-architecture re-skin)
-
-   Header CSS Module. Mirrors the reference architecture's
+/* Header CSS Module. Mirrors the reference architecture's
    `commonComponents/components/Header/Header.css`:
      - 64px tall, padded 16px
      - background: --colorNeutralBackgroundAlpha (translucent surface)
      - bottom border: --colorNeutralStroke2
      - flex row, brand on the left + tools on the right
 
-   No raw colors — all values use Fluent v9 design tokens injected by
+   No raw colors -- all values use Fluent v9 design tokens injected by
    <FluentProvider>, so light/dark theme flips for free. */
 
 .header {
