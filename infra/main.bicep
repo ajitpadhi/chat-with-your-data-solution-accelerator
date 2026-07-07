@@ -133,13 +133,13 @@ var azureOpenAIResourceName string = 'oai-${solutionSuffix}'
 param azureOpenAISkuName string = 'S0'
 
 @description('Optional. Azure OpenAI Model Deployment Name.')
-param azureOpenAIModel string = 'gpt-4.1'
+param azureOpenAIModel string = 'gpt-5.1'
 
 @description('Optional. Azure OpenAI Model Name.')
-param azureOpenAIModelName string = 'gpt-4.1'
+param azureOpenAIModelName string = 'gpt-5.1'
 
 @description('Optional. Azure OpenAI Model Version.')
-param azureOpenAIModelVersion string = '2025-04-14'
+param azureOpenAIModelVersion string = '2025-11-13'
 
 @description('Optional. Azure OpenAI Model Capacity - See here for more info  https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/quota.')
 param azureOpenAIModelCapacity int = 150
@@ -340,10 +340,12 @@ var queueName = 'doc-processing'
 var clientKey = '${uniqueString(guid(subscription().id, deployment().name))}${newGuidString}'
 var eventGridSystemTopicName = 'evgt-${solutionSuffix}'
 
-@description('Optional. Image version tag to use.')
-param appversion string = 'latest_waf' // Update GIT deployment branch
+// ACR name: alphanumeric only, 5-50 chars, globally unique
+var registryName = 'cr${solutionSuffix}'
 
-var registryName = 'cwydcontainerreg' // Update Registry name
+// Initial container image used at first deployment. The post-deployment build script
+// replaces this with real application images pushed to the per-deployment ACR.
+var initialContainerImage = 'mcr.microsoft.com/azuredocs/aci-helloworld:latest'
 
 var openAIFunctionsSystemPrompt = '''You help employees to navigate only private information sources.
     You must prioritize the function call over your general knowledge for any question by calling the search_documents function.
@@ -1313,6 +1315,32 @@ module searchUpdate 'br/public:avm/res/search/search-service:0.11.1' = if (datab
   ]
 }
 
+// ========== Azure Container Registry ========== //
+// Standard SKU is required for WAF/scalability scenarios; Basic is sufficient otherwise.
+module containerRegistry 'br/public:avm/res/container-registry/registry:0.9.1' = {
+  name: take('avm.res.container-registry.registry.${registryName}', 64)
+  params: {
+    name: registryName
+    location: location
+    tags: allTags
+    enableTelemetry: enableTelemetry
+    acrSku: enableScalability || enableRedundancy ? 'Standard' : 'Basic'
+    acrAdminUserEnabled: false
+    publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
+    roleAssignments: [
+      {
+        // AcrPull: allows the managed identity to pull images from this registry at runtime
+        principalId: managedIdentityModule.outputs.principalId
+        roleDefinitionIdOrName: '7f951dda-4ed3-4680-a7ca-43fe172d538d' // AcrPull
+        principalType: 'ServicePrincipal'
+      }
+    ]
+    diagnosticSettings: enableMonitoring
+      ? [{ workspaceResourceId: monitoring!.outputs.logAnalyticsWorkspaceId }]
+      : []
+  }
+}
+
 // AVM WAF - Server Farm + Web Site conversions
 var webServerFarmResourceName = hostingPlanName
 
@@ -1353,11 +1381,12 @@ module web 'modules/app/web.bicep' = {
     runtimeName: hostingModel == 'code' ? 'python' : null
     runtimeVersion: hostingModel == 'code' ? '3.11' : null
     // docker-specific fields apply only for container-hosted apps
-    dockerFullImageName: hostingModel == 'container' ? '${registryName}.azurecr.io/rag-webapp:${appversion}' : null
+    dockerFullImageName: hostingModel == 'container' ? initialContainerImage : null
     useDocker: hostingModel == 'container' ? true : false
     allowedOrigins: []
     appCommandLine: ''
     userAssignedIdentityResourceId: managedIdentityModule.outputs.resourceId
+    userAssignedIdentityClientId: managedIdentityModule.outputs.clientId
     diagnosticSettings: enableMonitoring ? [{ workspaceResourceId: monitoring!.outputs.logAnalyticsWorkspaceId }] : []
     vnetRouteAllEnabled: enablePrivateNetworking ? true : false
     vnetImagePullEnabled: enablePrivateNetworking ? true : false
@@ -1445,7 +1474,10 @@ module web 'modules/app/web.bicep' = {
                 AZURE_POSTGRESQL_DATABASE_NAME: postgresDBName
                 AZURE_POSTGRESQL_USER: managedIdentityModule.outputs.name
               }
-            : {}
+            : {},
+      hostingModel == 'container' ? {
+        DOCKER_REGISTRY_SERVER_URL: 'https://${registryName}.azurecr.io'
+      } : {}
     )
   }
 }
@@ -1464,9 +1496,10 @@ module adminweb 'modules/app/adminweb.bicep' = {
     runtimeName: hostingModel == 'code' ? 'python' : null
     runtimeVersion: hostingModel == 'code' ? '3.11' : null
     // docker-specific fields apply only for container-hosted apps
-    dockerFullImageName: hostingModel == 'container' ? '${registryName}.azurecr.io/rag-adminwebapp:${appversion}' : null
+    dockerFullImageName: hostingModel == 'container' ? initialContainerImage : null
     useDocker: hostingModel == 'container' ? true : false
     userAssignedIdentityResourceId: managedIdentityModule.outputs.resourceId
+    userAssignedIdentityClientId: managedIdentityModule.outputs.clientId
     e2eEncryptionEnabled: appServicePlanIsPremium
     // App settings
     appSettings: union(
@@ -1543,7 +1576,10 @@ module adminweb 'modules/app/adminweb.bicep' = {
                 AZURE_POSTGRESQL_DATABASE_NAME: postgresDBName
                 AZURE_POSTGRESQL_USER: managedIdentityModule.outputs.name
               }
-            : {}
+            : {},
+      hostingModel == 'container' ? {
+        DOCKER_REGISTRY_SERVER_URL: 'https://${registryName}.azurecr.io'
+      } : {}
     )
     applicationInsightsName: enableMonitoring ? monitoring!.outputs.applicationInsightsName : ''
     // WAF parameters
@@ -1564,7 +1600,7 @@ module function 'modules/app/function.bicep' = {
     tags: union(tags, { 'azd-service-name': hostingModel == 'container' ? 'function-docker' : 'function' })
     runtimeName: 'python'
     runtimeVersion: '3.11'
-    dockerFullImageName: hostingModel == 'container' ? '${registryName}.azurecr.io/rag-backend:${appversion}' : ''
+    dockerFullImageName: hostingModel == 'container' ? initialContainerImage : ''
     serverFarmResourceId: webServerFarm.outputs.resourceId
     applicationInsightsName: enableMonitoring ? monitoring!.outputs.applicationInsightsName : ''
     storageAccountName: storage.outputs.name
@@ -1639,7 +1675,10 @@ module function 'modules/app/function.bicep' = {
                 AZURE_POSTGRESQL_DATABASE_NAME: postgresDBName
                 AZURE_POSTGRESQL_USER: managedIdentityModule.outputs.name
               }
-            : {}
+            : {},
+      hostingModel == 'container' ? {
+        DOCKER_REGISTRY_SERVER_URL: 'https://${registryName}.azurecr.io'
+      } : {}
     )
   }
 }
@@ -2159,6 +2198,16 @@ output CONVERSATION_FLOW string = conversationFlow
 
 @description('Whether advanced image processing is enabled.')
 output USE_ADVANCED_IMAGE_PROCESSING bool = useAdvancedImageProcessing
+
+// Outputs useful for deployment scripts (ACR, identities, and service names)
+@description('Azure Container Registry name (short name)')
+output ACR_NAME string = registryName
+
+@description('Azure Container Registry login server (e.g. <name>.azurecr.io)')
+output ACR_LOGIN_SERVER string = '${registryName}.azurecr.io'
+
+@description('User-assigned managed identity client id used by the apps')
+output MANAGED_IDENTITY_CLIENT_ID string = managedIdentityModule.outputs.clientId
 
 @description('Whether Azure Search is using integrated vectorization.')
 output AZURE_SEARCH_USE_INTEGRATED_VECTORIZATION bool = azureSearchUseIntegratedVectorization
