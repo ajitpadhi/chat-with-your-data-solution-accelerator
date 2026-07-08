@@ -108,6 +108,11 @@ if ([string]::IsNullOrWhiteSpace($MiClientId)) {
     exit 1
 }
 
+$MiResourceId = az identity list `
+    --resource-group $ResourceGroupName `
+    --query "[0].id" `
+    --output tsv 2>$null
+
 $SubscriptionId = az account show --query id --output tsv
 
 Write-Host "  ACR             : $AcrLoginServer"
@@ -201,6 +206,8 @@ function Update-ContainerApp {
         --resource-group $ResourceGroupName `
         --image $FullImage `
         --revision-suffix $RevisionSuffix `
+        --registry-server $AcrLoginServer `
+        --registry-identity $MiResourceId `
         --output none
     if ($LASTEXITCODE -ne 0) { Write-Error "Failed to update Container App '$AppName'."; exit 1 }
 }
