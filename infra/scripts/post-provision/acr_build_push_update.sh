@@ -106,8 +106,6 @@ if [[ -z "${MI_CLIENT_ID:-}" ]]; then
     exit 1
 fi
 
-MI_RESOURCE_ID=$(az identity list --resource-group "$RESOURCE_GROUP" --query "[0].id" --output tsv 2>/dev/null || true)
-
 SUBSCRIPTION_ID=$(az account show --query id --output tsv)
 
 echo "  ACR             : $ACR_LOGIN_SERVER"
@@ -133,8 +131,6 @@ update_container_app() {
         --resource-group "$RESOURCE_GROUP" \
         --image "$full_image" \
         --revision-suffix "$revision_suffix" \
-        --registry-server "$ACR_LOGIN_SERVER" \
-        --registry-identity "$MI_RESOURCE_ID" \
         --output none
 }
 

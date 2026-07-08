@@ -645,6 +645,7 @@ module frontendContainerApp './modules/compute/container-app.bicep' = {
         env: concat(
           [
             { name: 'VITE_BACKEND_URL', value: 'https://${backendContainerApp.outputs.fqdn}' }
+            { name: 'BACKEND_API_URL', value: 'https://${backendContainerApp.outputs.fqdn}' }
           ],
           enableMonitoring
             ? [ { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString } ]
