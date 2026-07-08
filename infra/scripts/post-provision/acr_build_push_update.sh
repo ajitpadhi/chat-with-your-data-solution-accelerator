@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 #
-# Builds the application container images, pushes them to the per-deployment ACR,
-# and updates the App Services / Function App.
+# Builds the v2 application container images, pushes them to the per-deployment ACR,
+# and updates the Container Apps (frontend, backend) and Function App.
 #
 # Usage:
-#   ./scripts/acr_build_push_update.sh <resource-group> [--tag TAG]
+#   ./infra/scripts/post-provision/acr_build_push_update.sh <resource-group> [--tag TAG]
 #
 # Examples:
-#   ./scripts/acr_build_push_update.sh "rg-cwyd-dev"
-#   ./scripts/acr_build_push_update.sh "rg-cwyd-dev" --tag v1.0.0
+#   ./infra/scripts/post-provision/acr_build_push_update.sh "rg-cwyd-dev"
+#   ./infra/scripts/post-provision/acr_build_push_update.sh "rg-cwyd-dev" --tag v1.0.0
 #
 
 set -euo pipefail
@@ -48,11 +48,12 @@ if [[ -z "$RESOURCE_GROUP" ]]; then
     fi
 fi
 
+# Script lives at <repo>/infra/scripts/post-provision/, so walk up 3 levels for the repo root.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." >/dev/null 2>&1 && pwd)"
 
 # -------------------------------------------------------
-# Load environment variables from .azure/<env>/.env
+# Load ACR values from .azure/<env>/.env when present (optional convenience)
 # -------------------------------------------------------
 if [[ -d "${REPO_ROOT}/.azure" ]]; then
     while IFS= read -r line; do
@@ -62,11 +63,8 @@ if [[ -d "${REPO_ROOT}/.azure" ]]; then
             value="${value%\"}"
             value="${value#\"}"
             case "$key" in
-                ACR_NAME) ACR_NAME="$value" ;;
-                ACR_LOGIN_SERVER) ACR_LOGIN_SERVER="$value" ;;
-                SERVICE_WEB_RESOURCE_NAME) SERVICE_WEB_RESOURCE_NAME="$value" ;;
-                SERVICE_ADMINWEB_RESOURCE_NAME) SERVICE_ADMINWEB_RESOURCE_NAME="$value" ;;
-                SERVICE_FUNCTION_RESOURCE_NAME) SERVICE_FUNCTION_RESOURCE_NAME="$value" ;;
+                AZURE_CONTAINER_REGISTRY_NAME) ACR_NAME="$value" ;;
+                AZURE_CONTAINER_REGISTRY_ENDPOINT) ACR_LOGIN_SERVER="$value" ;;
                 AZURE_RESOURCE_GROUP) AZURE_RESOURCE_GROUP="$value" ;;
             esac
         fi
@@ -92,7 +90,8 @@ if [[ -z "${ACR_NAME:-}" ]]; then
 fi
 
 if [[ -z "${ACR_NAME:-}" ]]; then
-    echo "ERROR: No Azure Container Registry found in resource group '${RESOURCE_GROUP}'."
+    echo "ERROR: No Azure Container Registry found in resource group '${RESOURCE_GROUP}'." >&2
+    echo "Run 'azd provision' to create infrastructure first." >&2
     exit 1
 fi
 
@@ -103,7 +102,7 @@ fi
 MI_CLIENT_ID=$(az identity list --resource-group "$RESOURCE_GROUP" --query "[0].clientId" --output tsv 2>/dev/null || true)
 
 if [[ -z "${MI_CLIENT_ID:-}" ]]; then
-    echo "ERROR: No user-assigned managed identity found in resource group '${RESOURCE_GROUP}'."
+    echo "ERROR: No user-assigned managed identity found in resource group '${RESOURCE_GROUP}'." >&2
     exit 1
 fi
 
@@ -114,67 +113,29 @@ echo "  Managed identity: $MI_CLIENT_ID"
 echo ""
 
 # -------------------------------------------------------
-# Helper: get deployment outputs from Bicep
+# Helper: update a Container App (v2 frontend + backend)
+# Bicep already wires the ACR registry with the UAMI, so only the image is set here.
 # -------------------------------------------------------
-get_deployment_output() {
-    local output_name="$1"
-    local resource_group="$2"
-
-    local deployment_name
-    deployment_name=$(az deployment group list --resource-group "$resource_group" --query "[0].name" --output tsv 2>/dev/null || true)
-
-    if [[ -z "${deployment_name:-}" ]]; then
-        return
-    fi
-
-    az deployment group show \
-        --name "$deployment_name" \
-        --resource-group "$resource_group" \
-        --query "properties.outputs.${output_name}.value" \
-        --output tsv 2>/dev/null || true
-}
-
-# -------------------------------------------------------
-# Helper: update a web app
-# -------------------------------------------------------
-update_web_app() {
+update_container_app() {
     local app_name="$1"
     local image_name="$2"
 
     local full_image="${ACR_LOGIN_SERVER}/${image_name}:${IMAGE_TAG}"
-    echo "  Updating App Service: $app_name"
+    local revision_suffix="$(date +%Y%m%d%H%M%S)"
+    echo "  Updating Container App: $app_name"
     echo "    Image: $full_image"
+    echo "    Revision suffix: $revision_suffix"
 
-    # Set container image
-    az webapp config container set \
+    az containerapp update \
         --name "$app_name" \
         --resource-group "$RESOURCE_GROUP" \
-        --container-image-name "$full_image" \
+        --image "$full_image" \
+        --revision-suffix "$revision_suffix" \
         --output none
-
-    # Set DOCKER_REGISTRY_SERVER_URL app setting
-    az webapp config appsettings set \
-        --name "$app_name" \
-        --resource-group "$RESOURCE_GROUP" \
-        --settings "DOCKER_REGISTRY_SERVER_URL=https://${ACR_LOGIN_SERVER}" \
-        --output none
-
-    # Enable ACR pull with user-assigned managed identity
-    local resource_id="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Web/sites/${app_name}"
-    az resource update \
-        --ids "$resource_id" \
-        --set "properties.siteConfig.acrUseManagedIdentityCreds=true" \
-        --set "properties.siteConfig.acrUserManagedIdentityID=$MI_CLIENT_ID" \
-        --output none
-
-    # Restart to apply changes
-    az webapp restart \
-        --name "$app_name" \
-        --resource-group "$RESOURCE_GROUP"
 }
 
 # -------------------------------------------------------
-# Helper: update a function app
+# Helper: update a Function App (v2 function-docker on App Service Plan)
 # -------------------------------------------------------
 update_function_app() {
     local app_name="$1"
@@ -184,17 +145,20 @@ update_function_app() {
     echo "  Updating Function App: $app_name"
     echo "    Image: $full_image"
 
-    # Update Function App with container configuration using resource update
-    # This sets linuxFxVersion=DOCKER|<image> and enables managed identity pull
+    az functionapp config container set \
+        --name "$app_name" \
+        --resource-group "$RESOURCE_GROUP" \
+        --image "$full_image" \
+        --registry-server "https://${ACR_LOGIN_SERVER}" \
+        --output none
+
     local resource_id="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Web/sites/${app_name}"
     az resource update \
         --ids "$resource_id" \
-        --set "properties.siteConfig.linuxFxVersion=DOCKER|${full_image}" \
         --set "properties.siteConfig.acrUseManagedIdentityCreds=true" \
         --set "properties.siteConfig.acrUserManagedIdentityID=$MI_CLIENT_ID" \
         --output none
 
-    # Restart to apply changes
     az functionapp restart \
         --name "$app_name" \
         --resource-group "$RESOURCE_GROUP"
@@ -202,15 +166,16 @@ update_function_app() {
 
 # -------------------------------------------------------
 # Build and push images
+# v2 image map: matches docker/ Dockerfiles at repo root and bicep-defined image names.
 # -------------------------------------------------------
 IMAGE_DEFINITIONS=(
-    "docker/Frontend.Dockerfile:rag-webapp"
-    "docker/Admin.Dockerfile:rag-adminwebapp"
-    "docker/Backend.Dockerfile:rag-backend"
+    "docker/Dockerfile.frontend:rag-frontend"
+    "docker/Dockerfile.backend:rag-backend"
+    "docker/Dockerfile.functions:rag-functions"
 )
 
 echo ""
-echo "--- REMOTE BUILD (ACR Tasks) ---"
+echo "--- REMOTE BUILD (ACR Tasks - no local Docker required) ---"
 echo "    Note: your Azure identity needs Contributor or AcrPush access on the ACR."
 echo ""
 
@@ -223,7 +188,7 @@ for dockerfile in "${IMAGE_DEFINITIONS[@]}"; do
     az acr build \
         --registry "$ACR_NAME" \
         --image "$full_tag" \
-        --file "$dockerfile_path" \
+        --file "${REPO_ROOT}/${dockerfile_path}" \
         "$REPO_ROOT"
 
     echo "[$image_name] OK"
@@ -237,95 +202,70 @@ echo "=============================================="
 echo " Build & Push Complete"
 echo "=============================================="
 echo " Images pushed to ${ACR_LOGIN_SERVER}:"
-echo "   ${ACR_LOGIN_SERVER}/rag-webapp:${IMAGE_TAG}"
-echo "   ${ACR_LOGIN_SERVER}/rag-adminwebapp:${IMAGE_TAG}"
+echo "   ${ACR_LOGIN_SERVER}/rag-frontend:${IMAGE_TAG}"
 echo "   ${ACR_LOGIN_SERVER}/rag-backend:${IMAGE_TAG}"
+echo "   ${ACR_LOGIN_SERVER}/rag-functions:${IMAGE_TAG}"
 
 # -------------------------------------------------------
-# Discover and update each service
+# Discover and update Container Apps (frontend + backend)
 # -------------------------------------------------------
 echo ""
-echo "Updating web App Services..."
+echo "Updating Container Apps..."
 
-# -- Web app --
-APP_NAME="${SERVICE_WEB_RESOURCE_NAME:-}"
-if [[ -z "$APP_NAME" ]]; then
-    APP_LIST=$(az webapp list --resource-group "$RESOURCE_GROUP" --output json 2>/dev/null || true)
-    if [[ -n "$APP_LIST" ]]; then
-        # Try tag first
-        APP_NAME=$(echo "$APP_LIST" | jq -r '.[] | select(.tags and .tags."azd-service-name" == "web-docker") | .name' | head -1 || true)
+CA_LIST_JSON=$(az containerapp list --resource-group "$RESOURCE_GROUP" --output json 2>/dev/null || true)
 
-        # Fallback: try name pattern - no "admin" in name for web apps
+for pair in "frontend:rag-frontend" "backend:rag-backend"; do
+    service_tag="${pair%%:*}"
+    image_name="${pair##*:}"
+
+    APP_NAME=""
+    if [[ -n "$CA_LIST_JSON" ]]; then
+        # Prefer azd-service-name tag
+        APP_NAME=$(echo "$CA_LIST_JSON" | jq -r --arg tag "$service_tag" \
+            '.[] | select(.tags and .tags."azd-service-name" == $tag) | .name' | head -1 || true)
+
+        # Fallback: name pattern (Bicep uses ca-<service>-<suffix>)
         if [[ -z "$APP_NAME" ]]; then
-            APP_NAME=$(echo "$APP_LIST" | jq -r '.[] | select(.name | test("admin") | not) | .name' | head -1 || true)
-        fi
-
-        # Fallback: try deployment outputs from Bicep
-        if [[ -z "$APP_NAME" ]]; then
-            APP_NAME=$(get_deployment_output "SERVICE_WEB_RESOURCE_NAME" "$RESOURCE_GROUP" || true)
+            APP_NAME=$(echo "$CA_LIST_JSON" | jq -r --arg tag "$service_tag" \
+                '.[] | select(.name | startswith("ca-" + $tag + "-")) | .name' | head -1 || true)
         fi
     fi
-fi
 
-if [[ -n "$APP_NAME" ]]; then
-    update_web_app "$APP_NAME" "rag-webapp"
-else
-    echo "  WARNING: No App Service found for web app - skipping."
-fi
-
-# -- Admin web app --
-ADMIN_APP_NAME="${SERVICE_ADMINWEB_RESOURCE_NAME:-}"
-if [[ -z "$ADMIN_APP_NAME" ]]; then
-    APP_LIST=$(az webapp list --resource-group "$RESOURCE_GROUP" --output json 2>/dev/null || true)
-    if [[ -n "$APP_LIST" ]]; then
-        # Try tag first
-        ADMIN_APP_NAME=$(echo "$APP_LIST" | jq -r '.[] | select(.tags and .tags."azd-service-name" == "adminweb-docker") | .name' | head -1 || true)
-
-        # Fallback: try name pattern - "admin" must be in name for admin apps
-        if [[ -z "$ADMIN_APP_NAME" ]]; then
-            ADMIN_APP_NAME=$(echo "$APP_LIST" | jq -r '.[] | select(.name | test("admin")) | .name' | head -1 || true)
-        fi
-
-        # Fallback: try deployment outputs from Bicep
-        if [[ -z "$ADMIN_APP_NAME" ]]; then
-            ADMIN_APP_NAME=$(get_deployment_output "SERVICE_ADMINWEB_RESOURCE_NAME" "$RESOURCE_GROUP" || true)
-        fi
+    if [[ -z "$APP_NAME" ]]; then
+        echo "  WARNING: No Container App for azd-service-name='$service_tag' in RG '$RESOURCE_GROUP' - skipping."
+        continue
     fi
-fi
 
-if [[ -n "$ADMIN_APP_NAME" ]]; then
-    update_web_app "$ADMIN_APP_NAME" "rag-adminwebapp"
-else
-    echo "  WARNING: No App Service found for admin app - skipping."
-fi
+    update_container_app "$APP_NAME" "$image_name"
+done
 
-# -- Function App --
+# -------------------------------------------------------
+# Discover and update the Function App
+# -------------------------------------------------------
 echo ""
 echo "Updating Function App..."
-FUNC_APP_NAME="${SERVICE_FUNCTION_RESOURCE_NAME:-}"
+FUNC_LIST=$(az functionapp list --resource-group "$RESOURCE_GROUP" --output json 2>/dev/null || true)
+FUNC_APP_NAME=""
 
-if [[ -z "$FUNC_APP_NAME" ]]; then
-    FUNC_LIST=$(az functionapp list --resource-group "$RESOURCE_GROUP" --output json 2>/dev/null || true)
-    if [[ -n "$FUNC_LIST" ]]; then
-        # Try tag first
-        FUNC_APP_NAME=$(echo "$FUNC_LIST" | jq -r '.[] | select(.tags and .tags."azd-service-name" == "function-docker") | .name' | head -1 || true)
+if [[ -n "$FUNC_LIST" ]]; then
+    # Prefer azd-service-name tag
+    FUNC_APP_NAME=$(echo "$FUNC_LIST" | jq -r '.[] | select(.tags and .tags."azd-service-name" == "function") | .name' | head -1 || true)
 
-        # Fallback: use first available
-        if [[ -z "$FUNC_APP_NAME" ]]; then
-            FUNC_APP_NAME=$(echo "$FUNC_LIST" | jq -r '.[0].name' 2>/dev/null || true)
-        fi
+    # Fallback: name pattern (Bicep uses func-<suffix>-docker)
+    if [[ -z "$FUNC_APP_NAME" ]]; then
+        FUNC_APP_NAME=$(echo "$FUNC_LIST" | jq -r '.[] | select(.name | startswith("func-") and endswith("-docker")) | .name' | head -1 || true)
+    fi
 
-        # Fallback: try deployment outputs from Bicep
-        if [[ -z "$FUNC_APP_NAME" ]]; then
-            FUNC_APP_NAME=$(get_deployment_output "SERVICE_FUNCTION_RESOURCE_NAME" "$RESOURCE_GROUP" || true)
-        fi
+    # Last resort: first function app in the RG
+    if [[ -z "$FUNC_APP_NAME" ]]; then
+        FUNC_APP_NAME=$(echo "$FUNC_LIST" | jq -r '.[0].name' 2>/dev/null || true)
     fi
 fi
 
-if [[ -n "$FUNC_APP_NAME" ]]; then
-    update_function_app "$FUNC_APP_NAME" "rag-backend"
-else
+if [[ -z "$FUNC_APP_NAME" ]]; then
     echo "  WARNING: No Function App found in resource group '${RESOURCE_GROUP}' - skipping."
+else
+    update_function_app "$FUNC_APP_NAME" "rag-functions"
 fi
 
 echo ""

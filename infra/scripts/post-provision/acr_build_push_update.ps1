@@ -1,18 +1,19 @@
 <#
 .SYNOPSIS
-    Builds the application container images, pushes them to the per-deployment ACR,
-    and updates the App Services / Function App.
+    Builds the v2 application container images, pushes them to the per-deployment ACR,
+    and updates the Container Apps (frontend, backend) and Function App.
 .DESCRIPTION
-    This script is a thin wrapper around the existing build_and_push_images.ps1 and
-    update_app_service_images.ps1 scripts so it behaves like the combined workflow.
+    Uses ACR Tasks (remote build - no local Docker required) to build three images
+    from docker/Dockerfile.frontend, docker/Dockerfile.backend, docker/Dockerfile.functions,
+    then updates the deployed services discovered by their azd-service-name tags.
 .PARAMETER ResourceGroupName
     The name of the Azure resource group containing the deployed resources.
 .PARAMETER Tag
     Image tag to apply. Defaults to 'latest'.
 .EXAMPLE
-    .\scripts\acr_build_push_update.ps1 -ResourceGroupName "rg-cwyd-dev"
+    .\infra\scripts\post-provision\acr_build_push_update.ps1 -ResourceGroupName "rg-cwyd-dev"
 .EXAMPLE
-    .\scripts\acr_build_push_update.ps1 -ResourceGroupName "rg-cwyd-dev" -Tag v1.0.0
+    .\infra\scripts\post-provision\acr_build_push_update.ps1 -ResourceGroupName "rg-cwyd-dev" -Tag v1.0.0
 #>
 
 param(
@@ -24,7 +25,7 @@ param(
 )
 
 # -------------------------------------------------------
-# Resolve repo root (script lives in scripts/)
+# Resolve repo root (script lives in infra/scripts/post-provision/)
 # -------------------------------------------------------
 $ErrorActionPreference = "Stop"
 
@@ -33,9 +34,10 @@ try { chcp 65001 > $null 2>$null } catch {}
 $env:PYTHONIOENCODING = 'utf-8'
 $env:PYTHONUTF8 = '1'
 
-# Auto-load environment values from .azure/<env>/.env when present
+# Auto-load ACR values from .azure/<env>/.env when present (optional convenience).
+# Script lives at <repo>/infra/scripts/post-provision/, so walk up 3 levels for the repo root.
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$RepoRoot = Split-Path -Parent $ScriptDir
+$RepoRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $ScriptDir))
 $azureDir = Join-Path $RepoRoot '.azure'
 if (Test-Path $azureDir) {
     $envFiles = Get-ChildItem -Path $azureDir -Recurse -Filter '.env' -File -ErrorAction SilentlyContinue
@@ -46,19 +48,12 @@ if (Test-Path $azureDir) {
             foreach ($l in $lines) {
                 if ($l -match '^\s*([A-Za-z0-9_]+)\s*=\s*"?(.*?)"?\s*$') { $kv[$matches[1]] = $matches[2] }
             }
-            if ($kv.ContainsKey('ACR_NAME')) { $AcrName = $kv['ACR_NAME'] }
-            if ($kv.ContainsKey('ACR_LOGIN_SERVER')) { $AcrLoginServer = $kv['ACR_LOGIN_SERVER'] }
-            if ($kv.ContainsKey('SERVICE_WEB_RESOURCE_NAME')) { $ServiceWebName = $kv['SERVICE_WEB_RESOURCE_NAME'] }
-            if ($kv.ContainsKey('SERVICE_ADMINWEB_RESOURCE_NAME')) { $ServiceAdminwebName = $kv['SERVICE_ADMINWEB_RESOURCE_NAME'] }
-            if ($kv.ContainsKey('SERVICE_FUNCTION_RESOURCE_NAME')) { $ServiceFunctionName = $kv['SERVICE_FUNCTION_RESOURCE_NAME'] }
-            if ($kv.ContainsKey('AZURE_RESOURCE_GROUP')) { $EnvResourceGroup = $kv['AZURE_RESOURCE_GROUP'] }
-            if ($AcrName -or $ServiceWebName -or $ServiceAdminwebName -or $ServiceFunctionName) {
+            if ($kv.ContainsKey('AZURE_CONTAINER_REGISTRY_NAME')) { $AcrName = $kv['AZURE_CONTAINER_REGISTRY_NAME'] }
+            if ($kv.ContainsKey('AZURE_CONTAINER_REGISTRY_ENDPOINT')) { $AcrLoginServer = $kv['AZURE_CONTAINER_REGISTRY_ENDPOINT'] }
+            if ($AcrName) {
                 Write-Host "Loaded env values from $($ef.FullName)"
-                if ($AcrName) { Write-Host "  ACR_NAME=$AcrName" }
-                if ($AcrLoginServer) { Write-Host "  ACR_LOGIN_SERVER=$AcrLoginServer" }
-                if ($ServiceWebName) { Write-Host "  SERVICE_WEB_RESOURCE_NAME=$ServiceWebName" }
-                if ($ServiceAdminwebName) { Write-Host "  SERVICE_ADMINWEB_RESOURCE_NAME=$ServiceAdminwebName" }
-                if ($ServiceFunctionName) { Write-Host "  SERVICE_FUNCTION_RESOURCE_NAME=$ServiceFunctionName" }
+                Write-Host "  AZURE_CONTAINER_REGISTRY_NAME=$AcrName"
+                if ($AcrLoginServer) { Write-Host "  AZURE_CONTAINER_REGISTRY_ENDPOINT=$AcrLoginServer" }
                 break
             }
         } catch {
@@ -67,10 +62,12 @@ if (Test-Path $azureDir) {
     }
 }
 
+# v2 image map: matches docker/ Dockerfiles at repo root and bicep-defined image names.
+# (Bicep hard-codes rag-functions for the function app; frontend/backend are updated by this script.)
 $Images = @(
-    [pscustomobject]@{ Name = 'rag-webapp'; Dockerfile = 'docker/Frontend.Dockerfile' },
-    [pscustomobject]@{ Name = 'rag-adminwebapp'; Dockerfile = 'docker/Admin.Dockerfile' },
-    [pscustomobject]@{ Name = 'rag-backend'; Dockerfile = 'docker/Backend.Dockerfile' }
+    [pscustomobject]@{ Name = 'rag-frontend';  Dockerfile = 'docker/Dockerfile.frontend' },
+    [pscustomobject]@{ Name = 'rag-backend';   Dockerfile = 'docker/Dockerfile.backend' },
+    [pscustomobject]@{ Name = 'rag-functions'; Dockerfile = 'docker/Dockerfile.functions' }
 )
 
 Write-Host "=============================================="
@@ -117,9 +114,9 @@ Write-Host "  ACR             : $AcrLoginServer"
 Write-Host "  Managed identity: $MiClientId"
 Write-Host ""
 
-# -------------------------------------------------------
-# Helper: get deployment outputs from Bicep
-# -------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Helper: get deployment outputs from Bicep (fallback discovery)
+# ---------------------------------------------------------------------------
 function Get-DeploymentOutput {
     param(
         [string]$OutputName,
@@ -184,48 +181,32 @@ foreach ($img in $Images) {
 }
 
 # ---------------------------------------------------------------------------
-# Helper: update a web app
+# Helper: update a Container App (v2 frontend + backend)
+# Bicep already wires the ACR registry with the UAMI, so only the image is set here.
 # ---------------------------------------------------------------------------
-function Update-WebApp {
+function Update-ContainerApp {
     param(
         [string]$AppName,
         [string]$ImageName
     )
 
     $FullImage = "${AcrLoginServer}/${ImageName}:${Tag}"
-    Write-Host "  Updating App Service: $AppName"
+    $RevisionSuffix = Get-Date -Format "yyyyMMddHHmmss"
+    Write-Host "  Updating Container App: $AppName"
     Write-Host "    Image: $FullImage"
+    Write-Host "    Revision suffix: $RevisionSuffix"
 
-    # 1. Set container image
-    az webapp config container set `
+    az containerapp update `
         --name $AppName `
         --resource-group $ResourceGroupName `
-        --container-image-name $FullImage `
+        --image $FullImage `
+        --revision-suffix $RevisionSuffix `
         --output none
-
-    # 2. Set DOCKER_REGISTRY_SERVER_URL app setting
-    az webapp config appsettings set `
-        --name $AppName `
-        --resource-group $ResourceGroupName `
-        --settings "DOCKER_REGISTRY_SERVER_URL=https://${AcrLoginServer}" `
-        --output none
-
-    # 3. Enable ACR pull with user-assigned managed identity
-    $ResourceId = "/subscriptions/${SubscriptionId}/resourceGroups/${ResourceGroupName}/providers/Microsoft.Web/sites/${AppName}"
-    az resource update `
-        --ids $ResourceId `
-        --set "properties.siteConfig.acrUseManagedIdentityCreds=true" `
-        --set "properties.siteConfig.acrUserManagedIdentityID=$MiClientId" `
-        --output none
-
-    # 4. Restart to apply changes
-    az webapp restart `
-        --name $AppName `
-        --resource-group $ResourceGroupName
+    if ($LASTEXITCODE -ne 0) { Write-Error "Failed to update Container App '$AppName'."; exit 1 }
 }
 
 # ---------------------------------------------------------------------------
-# Helper: update a function app
+# Helper: update a Function App (v2 function-docker on App Service Plan)
 # ---------------------------------------------------------------------------
 function Update-FunctionApp {
     param(
@@ -237,10 +218,8 @@ function Update-FunctionApp {
     Write-Host "  Updating Function App: $AppName"
     Write-Host "    Image: $FullImage"
 
-    # Set the container image via the dedicated command. This lets az build the
-    # "DOCKER|<image>" linuxFxVersion internally, avoiding passing a literal '|'
-    # on the command line (cmd.exe would otherwise interpret it as a pipe and
-    # fail with "'<registry>.azurecr.io' is not recognized ...").
+    # Use the dedicated command so az builds "DOCKER|<image>" linuxFxVersion
+    # internally, avoiding a literal '|' on the command line.
     az functionapp config container set `
         --name $AppName `
         --resource-group $ResourceGroupName `
@@ -248,102 +227,89 @@ function Update-FunctionApp {
         --registry-server "https://${AcrLoginServer}" `
         --output none
 
-    # Enable managed identity based ACR pull (no pipe characters here)
+    # Enable managed-identity based ACR pull
     $ResourceId = "/subscriptions/${SubscriptionId}/resourceGroups/${ResourceGroupName}/providers/Microsoft.Web/sites/${AppName}"
-
     az resource update `
         --ids $ResourceId `
         --set "properties.siteConfig.acrUseManagedIdentityCreds=true" `
         --set "properties.siteConfig.acrUserManagedIdentityID=$MiClientId" `
         --output none
 
-    # Restart to apply changes
     az functionapp restart `
         --name $AppName `
         --resource-group $ResourceGroupName
 }
 
 # ---------------------------------------------------------------------------
-# Discover and update each service
+# Discover and update Container Apps (frontend + backend)
 # ---------------------------------------------------------------------------
-$ServiceImageMap = @{
-    "web-docker"      = "rag-webapp"
-    "adminweb-docker" = "rag-adminwebapp"
+$ContainerAppServiceMap = @(
+    [pscustomobject]@{ ServiceTag = 'frontend'; ImageName = 'rag-frontend' },
+    [pscustomobject]@{ ServiceTag = 'backend';  ImageName = 'rag-backend' }
+)
+
+Write-Host ""
+Write-Host "Updating Container Apps..."
+
+$ContainerAppListJson = az containerapp list --resource-group $ResourceGroupName --output json 2>$null
+$containerApps = @()
+if (-not [string]::IsNullOrWhiteSpace($ContainerAppListJson)) {
+    $containerApps = $ContainerAppListJson | ConvertFrom-Json
 }
 
-# -- Web apps --
-Write-Host "Updating web App Services..."
-foreach ($ServiceTag in @("web-docker", "adminweb-docker")) {
-    $AppName = $null
-    switch ($ServiceTag) {
-        "web-docker"      { $AppName = $ServiceWebName }
-        "adminweb-docker" { $AppName = $ServiceAdminwebName }
+foreach ($entry in $ContainerAppServiceMap) {
+    $AppName = ($containerApps `
+        | Where-Object { $_.tags -and $_.tags.'azd-service-name' -eq $entry.ServiceTag } `
+        | Select-Object -First 1).name
+
+    # Fallback: name pattern (Bicep uses ca-<service>-<suffix>)
+    if ([string]::IsNullOrWhiteSpace($AppName)) {
+        $AppName = ($containerApps `
+            | Where-Object { $_.name -like "ca-$($entry.ServiceTag)-*" } `
+            | Select-Object -First 1).name
     }
 
     if ([string]::IsNullOrWhiteSpace($AppName)) {
-        $AppListJson = az webapp list --resource-group $ResourceGroupName --output json 2>$null
-        if (-not [string]::IsNullOrWhiteSpace($AppListJson)) {
-            $apps = $AppListJson | ConvertFrom-Json
-            # Try tag first
-            $AppName = ($apps | Where-Object { $_.tags -and $_.tags.'azd-service-name' -eq $ServiceTag } | Select-Object -First 1).name
-
-            # Fallback: try name pattern - match by 'admin' in name for adminweb, exclude admin for web
-            if ([string]::IsNullOrWhiteSpace($AppName)) {
-                if ($ServiceTag -eq "web-docker") {
-                    $AppName = ($apps | Where-Object { $_.name -notlike "*admin*" } | Select-Object -First 1).name
-                } else {
-                    $AppName = ($apps | Where-Object { $_.name -like "*admin*" } | Select-Object -First 1).name
-                }
-            }
-
-            # Fallback: try deployment outputs from Bicep
-            if ([string]::IsNullOrWhiteSpace($AppName)) {
-                $outputName = if ($ServiceTag -eq "web-docker") { "SERVICE_WEB_RESOURCE_NAME" } else { "SERVICE_ADMINWEB_RESOURCE_NAME" }
-                $AppName = Get-DeploymentOutput -OutputName $outputName -ResourceGroup $ResourceGroupName
-            }
-        }
-    }
-
-    if ([string]::IsNullOrWhiteSpace($AppName)) {
-        Write-Host "  WARNING: No App Service for tag azd-service-name='$ServiceTag' found - skipping."
+        Write-Host "  WARNING: No Container App for azd-service-name='$($entry.ServiceTag)' in RG '$ResourceGroupName' - skipping."
         continue
     }
-    Update-WebApp -AppName $AppName -ImageName $ServiceImageMap[$ServiceTag]
+
+    Update-ContainerApp -AppName $AppName -ImageName $entry.ImageName
 }
 
-# -- Function App --
+# ---------------------------------------------------------------------------
+# Discover and update the Function App
+# ---------------------------------------------------------------------------
 Write-Host ""
 Write-Host "Updating Function App..."
-$FuncAppName = $ServiceFunctionName
-if (-not [string]::IsNullOrWhiteSpace($FuncAppName)) {
-    Write-Host "  Using environment-provided Function App name: $FuncAppName"
-} else {
-    $FuncListJson = az functionapp list --resource-group $ResourceGroupName --output json 2>$null
-    if (-not [string]::IsNullOrWhiteSpace($FuncListJson)) {
-        $funcs = $FuncListJson | ConvertFrom-Json
 
-        # Try tag first
-        $FuncAppName = ($funcs | Where-Object { $_.tags -and $_.tags.'azd-service-name' -eq 'function-docker' } | Select-Object -First 1).name
+$FuncListJson = az functionapp list --resource-group $ResourceGroupName --output json 2>$null
+$FuncAppName = $null
+if (-not [string]::IsNullOrWhiteSpace($FuncListJson)) {
+    $funcs = $FuncListJson | ConvertFrom-Json
 
-        # Fallback: use first available
-        if ([string]::IsNullOrWhiteSpace($FuncAppName) -and $funcs.Count -gt 0) {
-            $FuncAppName = $funcs[0].name
-        }
+    # Prefer azd-service-name tag
+    $FuncAppName = ($funcs `
+        | Where-Object { $_.tags -and $_.tags.'azd-service-name' -eq 'function' } `
+        | Select-Object -First 1).name
 
-        # Fallback: try deployment outputs from Bicep
-        if ([string]::IsNullOrWhiteSpace($FuncAppName)) {
-            $FuncAppName = Get-DeploymentOutput -OutputName "SERVICE_FUNCTION_RESOURCE_NAME" -ResourceGroup $ResourceGroupName
-            if (-not [string]::IsNullOrWhiteSpace($FuncAppName)) {
-                Write-Host "  Debug: Found '$FuncAppName' from deployment output 'SERVICE_FUNCTION_RESOURCE_NAME'"
-            }
-        }
+    # Fallback: name pattern (Bicep uses func-<suffix>-docker)
+    if ([string]::IsNullOrWhiteSpace($FuncAppName)) {
+        $FuncAppName = ($funcs `
+            | Where-Object { $_.name -like "func-*-docker" } `
+            | Select-Object -First 1).name
+    }
+
+    # Last resort: first function app in the RG
+    if ([string]::IsNullOrWhiteSpace($FuncAppName) -and $funcs.Count -gt 0) {
+        $FuncAppName = $funcs[0].name
     }
 }
 
 if ([string]::IsNullOrWhiteSpace($FuncAppName)) {
     Write-Host "  WARNING: No Function App found in resource group '$ResourceGroupName' - skipping."
 } else {
-    Update-FunctionApp -AppName $FuncAppName -ImageName "rag-backend"
+    Update-FunctionApp -AppName $FuncAppName -ImageName "rag-functions"
 }
 
 Write-Host ""
