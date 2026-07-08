@@ -59,8 +59,8 @@ param location string
   azd: {
     type: 'location'
     usageName: [
-      'OpenAI.GlobalStandard.gpt-5.1,150'
-      'OpenAI.GlobalStandard.o4-mini,50'
+      'OpenAI.GlobalStandard.gpt-5.4-mini,150'
+      'OpenAI.GlobalStandard.gpt-5-mini,50'
       'OpenAI.Standard.text-embedding-3-large,100'
     ]
   }
@@ -92,10 +92,10 @@ param ingestionTrigger string = 'direct_enqueue'
 
 @minLength(1)
 @description('Optional. Primary chat model deployment name.')
-param gptModelName string = 'gpt-5.1'
+param gptModelName string = 'gpt-5.4-mini'
 
 @description('Optional. Primary chat model version.')
-param gptModelVersion string = '2025-11-13'
+param gptModelVersion string = '2026-03-17'
 
 @allowed([
   'Standard'
@@ -106,14 +106,14 @@ param gptModelDeploymentType string = 'GlobalStandard'
 
 @minValue(1)
 @description('Optional. Token capacity (thousands of TPM) for the primary chat model.')
-param gptModelCapacity int = 150
+param gptModelCapacity int = 50
 
 @minLength(1)
 @description('Optional. Reasoning model deployment name (surfaced via the SSE reasoning channel).')
-param reasoningModelName string = 'o4-mini'
+param reasoningModelName string = 'gpt-5-mini'
 
 @description('Optional. Reasoning model version.')
-param reasoningModelVersion string = '2025-04-16'
+param reasoningModelVersion string = '2025-08-07'
 
 @allowed([
   'Standard'
@@ -128,7 +128,7 @@ param reasoningModelCapacity int = 50
 
 @minLength(1)
 @description('Optional. Embedding model deployment name (used by Foundry IQ and the LangGraph indexer).')
-param embeddingModelName string = 'text-embedding-3-large'
+param embeddingModelName string = 'text-embedding-3-small'
 
 @description('Optional. Embedding model version.')
 param embeddingModelVersion string = '1'
