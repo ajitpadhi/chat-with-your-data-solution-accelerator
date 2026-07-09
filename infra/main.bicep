@@ -269,8 +269,6 @@ module avmDeployment './avm/main.bicep' = if (isAvm) {
     searchKnowledgeBaseName: searchKnowledgeBaseName
     searchKnowledgeSourceName: searchKnowledgeSourceName
     searchKnowledgeBaseApiVersion: searchKnowledgeBaseApiVersion
-    containerRegistryEndpoint: containerRegistryEndpoint
-    imageTag: imageTag
     enableTelemetry: enableTelemetry
     enableMonitoring: enableMonitoring
     enableScalability: enableScalability
@@ -318,8 +316,6 @@ module bicepDeployment './bicep/main.bicep' = if (isBicep) {
     searchKnowledgeBaseName: searchKnowledgeBaseName
     searchKnowledgeSourceName: searchKnowledgeSourceName
     searchKnowledgeBaseApiVersion: searchKnowledgeBaseApiVersion
-    containerRegistryEndpoint: containerRegistryEndpoint
-    imageTag: imageTag
     enableMonitoring: enableMonitoring
     existingLogAnalyticsWorkspaceId: existingLogAnalyticsWorkspaceId
     existingFoundryProjectResourceId: existingFoundryProjectResourceId

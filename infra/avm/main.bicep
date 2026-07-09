@@ -148,16 +148,6 @@ param searchKnowledgeSourceName string = 'cwyd-index-ks'
 param searchKnowledgeBaseApiVersion string = '2025-11-01-preview'
 
 // ============================================================================
-// Parameters — Compute
-// ============================================================================
-
-@description('Optional. The container registry login server/endpoint for the container images (for example, an Azure Container Registry endpoint).')
-param containerRegistryEndpoint string = 'cwydcontainerreg.azurecr.io'
-
-@description('Optional. The image tag for the container images.')
-param imageTag string = 'latest'
-
-// ============================================================================
 // Parameters — Existing Resources
 // ============================================================================
 
