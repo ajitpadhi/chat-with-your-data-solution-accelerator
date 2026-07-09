@@ -250,7 +250,7 @@ echo "Updating Container Apps..."
 
 CA_LIST_JSON=$(az containerapp list --resource-group "$RESOURCE_GROUP" --output json 2>/dev/null || true)
 
-for pair in "frontend:rag-frontend" "backend:rag-backend"; do
+for pair in "frontend:rag-frontend" "backend:rag-backend" "function:rag-functions"; do
     service_tag="${pair%%:*}"
     image_name="${pair##*:}"
 

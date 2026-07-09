@@ -282,7 +282,7 @@ function Update-FunctionApp {
 $ContainerAppServiceMap = @(
     [pscustomobject]@{ ServiceTag = 'frontend'; ImageName = 'rag-frontend' },
     [pscustomobject]@{ ServiceTag = 'backend';  ImageName = 'rag-backend' },
-    [pscustomobject]@{ ServiceTag = 'function';  ImageName = 'rag-function' }
+    [pscustomobject]@{ ServiceTag = 'function';  ImageName = 'rag-functions' }
 )
 
 Write-Host ""

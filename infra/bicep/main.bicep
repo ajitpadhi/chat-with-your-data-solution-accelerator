@@ -593,65 +593,74 @@ module frontendContainerApp './modules/compute/container-app.bicep' = {
   }
 }
 
-// ========== App Service Plan (hosts the Function App) ========== //
-module appServicePlan './modules/compute/app-service-plan.bicep' = {
-  name: take('module.app-service-plan.${solutionName}', 64)
+// ========== Function Container App ========== //
+module functionContainerApp './modules/compute/container-app.bicep' = {
+  name: take('module.container-app-function.${solutionName}', 64)
   params: {
-    solutionName: solutionSuffix
-    location: location
-    tags: allTags
-    skuName: 'B3'
-  }
-}
-
-// ========== Function App (container image or code/zip, Linux) ========== //
-var functionName = 'func-${solutionSuffix}'
-var functionAppName = '${functionName}-docker'
-module functionApp './modules/compute/function-app.bicep' = {
-  name: take('module.function-app.${solutionName}', 64)
-  params: {
-    name: functionAppName
+    name: 'ca-function-${solutionSuffix}'
     location: location
     tags: union(allTags, { 'azd-service-name': 'function' })
-    kind: 'functionapp,linux,container'
-    dockerFullImageName: sampleContainerImage
-    serverFarmResourceId: appServicePlan.outputs.resourceId
-    storageAccountName: storageAccount.outputs.name
-    userAssignedIdentityClientId: userAssignedIdentity.outputs.clientId
+    environmentResourceId: containerAppsEnv.outputs.resourceId
     identity: {
       type: 'SystemAssigned, UserAssigned'
       userAssignedIdentities: {
         '${userAssignedIdentity.outputs.resourceId}': {}
       }
     }
-    runtimeStack: 'python'
-    runtimeVersion: '3.11'
-    appSettings: concat(
-      [
-        { name: 'AZURE_CLIENT_ID', value: userAssignedIdentity.outputs.clientId }
-        { name: 'AZURE_UAMI_CLIENT_ID', value: userAssignedIdentity.outputs.clientId }
-        { name: 'AZURE_TENANT_ID', value: subscription().tenantId }
-        { name: 'AZURE_ENVIRONMENT', value: 'production' }
-        { name: 'AZURE_AI_PROJECT_ENDPOINT', value: projectEndpoint }
-        { name: 'AZURE_OPENAI_ENDPOINT', value: aiFoundryEndpoint }
-        { name: 'AZURE_AI_SERVICES_ENDPOINT', value: aiFoundryEndpoint }
-        { name: 'AZURE_OPENAI_API_VERSION', value: azureOpenAiApiVersion }
-        { name: 'AZURE_OPENAI_EMBEDDING_DEPLOYMENT', value: embeddingModelName }
-        { name: 'AZURE_DB_TYPE', value: databaseType }
-        { name: 'AZURE_INDEX_STORE', value: indexStoreValue }
-        { name: 'AZURE_COSMOS_ENDPOINT', value: isCosmos ? cosmosDb!.outputs.endpoint : '' }
-        { name: 'AZURE_AI_SEARCH_ENDPOINT', value: isCosmos ? aiSearch!.outputs.endpoint : '' }
-        { name: 'AZURE_POSTGRES_ENDPOINT', value: postgresLibpqUri }
-        { name: 'AZURE_POSTGRES_ADMIN_PRINCIPAL_NAME', value: databaseType == 'postgresql' ? userAssignedIdentity.outputs.name : '' }
-        { name: 'AZURE_STORAGE_ACCOUNT_NAME', value: storageAccount.outputs.name }
-        { name: 'AZURE_DOCUMENTS_CONTAINER', value: documentsContainerName }
-        { name: 'AZURE_DOC_PROCESSING_QUEUE', value: docProcessingQueueName }
-        { name: 'AZURE_INGESTION_TRIGGER', value: ingestionTrigger }
-      ],
-      enableMonitoring
-        ? [ { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString } ]
-        : []
-    )
+    registries: [
+      {
+        server: containerRegistry.outputs.loginServer
+        identity: userAssignedIdentity.outputs.resourceId
+      }
+    ]
+    workloadProfileName: 'Consumption'
+    ingressTargetPort: 80
+    scaleSettings: {
+      minReplicas: 1
+      maxReplicas: 3
+    }
+    containers: [
+      {
+        name: 'function'
+        image: sampleContainerImage
+        resources: {
+          cpu: json('0.5')
+          memory: '1.0Gi'
+        }
+        env: concat(
+          [
+            { name: 'AzureWebJobsStorage__accountName', value: storageAccount.outputs.name }
+            { name: 'AzureWebJobsStorage__credential', value: 'managedidentity' }
+            { name: 'AzureWebJobsStorage__clientId', value: userAssignedIdentity.outputs.clientId }
+            { name: 'WEBSITES_ENABLE_APP_SERVICE_STORAGE', value: 'false' }
+            { name: 'FUNCTIONS_WORKER_RUNTIME', value: 'python' }
+            { name: 'FUNCTIONS_EXTENSION_VERSION', value: '~4' }
+            { name: 'AZURE_CLIENT_ID', value: userAssignedIdentity.outputs.clientId }
+            { name: 'AZURE_UAMI_CLIENT_ID', value: userAssignedIdentity.outputs.clientId }
+            { name: 'AZURE_TENANT_ID', value: subscription().tenantId }
+            { name: 'AZURE_ENVIRONMENT', value: 'production' }
+            { name: 'AZURE_AI_PROJECT_ENDPOINT', value: projectEndpoint }
+            { name: 'AZURE_OPENAI_ENDPOINT', value: aiFoundryEndpoint }
+            { name: 'AZURE_AI_SERVICES_ENDPOINT', value: aiFoundryEndpoint }
+            { name: 'AZURE_OPENAI_API_VERSION', value: azureOpenAiApiVersion }
+            { name: 'AZURE_OPENAI_EMBEDDING_DEPLOYMENT', value: embeddingModelName }
+            { name: 'AZURE_DB_TYPE', value: databaseType }
+            { name: 'AZURE_INDEX_STORE', value: indexStoreValue }
+            { name: 'AZURE_COSMOS_ENDPOINT', value: isCosmos ? cosmosDb!.outputs.endpoint : '' }
+            { name: 'AZURE_AI_SEARCH_ENDPOINT', value: isCosmos ? aiSearch!.outputs.endpoint : '' }
+            { name: 'AZURE_POSTGRES_ENDPOINT', value: postgresLibpqUri }
+            { name: 'AZURE_POSTGRES_ADMIN_PRINCIPAL_NAME', value: databaseType == 'postgresql' ? userAssignedIdentity.outputs.name : '' }
+            { name: 'AZURE_STORAGE_ACCOUNT_NAME', value: storageAccount.outputs.name }
+            { name: 'AZURE_DOCUMENTS_CONTAINER', value: documentsContainerName }
+            { name: 'AZURE_DOC_PROCESSING_QUEUE', value: docProcessingQueueName }
+            { name: 'AZURE_INGESTION_TRIGGER', value: ingestionTrigger }
+          ],
+          enableMonitoring
+            ? [ { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString } ]
+            : []
+        )
+      }
+    ]
   }
 }
 
@@ -726,7 +735,7 @@ module roleAssignments './modules/identity/role-assignments.bicep' = {
     uamiPrincipalId: userAssignedIdentity.outputs.principalId
     foundryAccountPrincipalId: foundryAccountPrincipalId
     foundryProjectPrincipalId: foundryProjectPrincipalId
-    functionPrincipalId: functionApp.outputs.principalId
+    functionPrincipalId: functionContainerApp.outputs.principalId
     searchPrincipalId: isCosmos ? aiSearch!.outputs.identityPrincipalId : ''
     deployingUserPrincipalId: deployingUserPrincipalId
     deployingUserPrincipalType: deployingUserPrincipalType
@@ -853,11 +862,11 @@ output AZURE_BACKEND_URL string = 'https://${backendContainerApp.outputs.fqdn}'
 @description('Frontend Container App URL.')
 output AZURE_FRONTEND_URL string = 'https://${frontendContainerApp.outputs.fqdn}'
 
-@description('Function App URL.')
-output AZURE_FUNCTION_APP_URL string = 'https://${functionApp.outputs.defaultHostName}'
+@description('Function Container App URL.')
+output AZURE_FUNCTION_APP_URL string = 'https://${functionContainerApp.outputs.fqdn}'
 
-@description('Function App name.')
-output AZURE_FUNCTION_APP_NAME string = functionApp.outputs.name
+@description('Function Container App name.')
+output AZURE_FUNCTION_APP_NAME string = functionContainerApp.outputs.name
 
 @description('Container Registry login server.')
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = containerRegistry.outputs.loginServer
