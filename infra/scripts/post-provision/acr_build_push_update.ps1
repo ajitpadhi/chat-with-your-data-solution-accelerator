@@ -281,7 +281,8 @@ function Update-FunctionApp {
 # ---------------------------------------------------------------------------
 $ContainerAppServiceMap = @(
     [pscustomobject]@{ ServiceTag = 'frontend'; ImageName = 'rag-frontend' },
-    [pscustomobject]@{ ServiceTag = 'backend';  ImageName = 'rag-backend' }
+    [pscustomobject]@{ ServiceTag = 'backend';  ImageName = 'rag-backend' },
+    [pscustomobject]@{ ServiceTag = 'function';  ImageName = 'rag-function' }
 )
 
 Write-Host ""
@@ -311,41 +312,6 @@ foreach ($entry in $ContainerAppServiceMap) {
     }
 
     Update-ContainerApp -AppName $AppName -ImageName $entry.ImageName
-}
-
-# ---------------------------------------------------------------------------
-# Discover and update the Function App
-# ---------------------------------------------------------------------------
-Write-Host ""
-Write-Host "Updating Function App..."
-
-$FuncListJson = az functionapp list --resource-group $ResourceGroupName --output json 2>$null
-$FuncAppName = $null
-if (-not [string]::IsNullOrWhiteSpace($FuncListJson)) {
-    $funcs = $FuncListJson | ConvertFrom-Json
-
-    # Prefer azd-service-name tag
-    $FuncAppName = ($funcs `
-        | Where-Object { $_.tags -and $_.tags.'azd-service-name' -eq 'function' } `
-        | Select-Object -First 1).name
-
-    # Fallback: name pattern (Bicep uses func-<suffix>-docker)
-    if ([string]::IsNullOrWhiteSpace($FuncAppName)) {
-        $FuncAppName = ($funcs `
-            | Where-Object { $_.name -like "func-*-docker" } `
-            | Select-Object -First 1).name
-    }
-
-    # Last resort: first function app in the RG
-    if ([string]::IsNullOrWhiteSpace($FuncAppName) -and $funcs.Count -gt 0) {
-        $FuncAppName = $funcs[0].name
-    }
-}
-
-if ([string]::IsNullOrWhiteSpace($FuncAppName)) {
-    Write-Host "  WARNING: No Function App found in resource group '$ResourceGroupName' - skipping."
-} else {
-    Update-FunctionApp -AppName $FuncAppName -ImageName "rag-functions"
 }
 
 Write-Host ""

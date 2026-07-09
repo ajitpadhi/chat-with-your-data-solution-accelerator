@@ -12,6 +12,14 @@ param location string
 @description('Resource tags.')
 param tags object = {}
 
+@allowed([
+  'containerapps'
+  'workflowapp'
+  'functionapp'
+])
+@description('Optional. Metadata used to render different experiences for resources of the same type.')
+param kind string = 'containerapps'
+
 @description('Resource ID of the Container Apps Environment.')
 param environmentResourceId string
 
@@ -71,6 +79,7 @@ module containerApp 'br/public:avm/res/app/container-app:0.22.1' = {
     name: name
     location: location
     tags: tags
+    kind: kind
     enableTelemetry: enableTelemetry
     environmentResourceId: environmentResourceId
     containers: containers

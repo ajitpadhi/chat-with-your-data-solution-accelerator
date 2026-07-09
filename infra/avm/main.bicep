@@ -1182,70 +1182,140 @@ module frontendContainerApp './modules/compute/container-app.bicep' = {
   }
 }
 
-module appServicePlan './modules/compute/app-service-plan.bicep' = {
-  name: take('module.app-service-plan.${solutionName}', 64)
-  params: {
-    solutionName: solutionSuffix
-    location: location
-    tags: allTags
-    enableTelemetry: enableTelemetry
-    skuName: (enableScalability || enableRedundancy) ? 'P1v3' : 'B3'
-    skuCapacity: enableRedundancy ? 3 : 2
-    zoneRedundant: enableRedundancy
-  }
-}
+// module appServicePlan './modules/compute/app-service-plan.bicep' = {
+//   name: take('module.app-service-plan.${solutionName}', 64)
+//   params: {
+//     solutionName: solutionSuffix
+//     location: location
+//     tags: allTags
+//     enableTelemetry: enableTelemetry
+//     skuName: (enableScalability || enableRedundancy) ? 'P1v3' : 'B3'
+//     skuCapacity: enableRedundancy ? 3 : 2
+//     zoneRedundant: enableRedundancy
+//   }
+// }
 
-var functionName = 'func-${solutionSuffix}'
-var hostingModel = 'container'
-module functionApp './modules/compute/function-app.bicep' = {
-  name: hostingModel == 'container' ? '${functionName}-docker' : functionName
+module functionContainerApp './modules/compute/container-app.bicep' = {
+  name: take('module.container-app-function.${solutionName}', 64)
   params: {
-    name: hostingModel == 'container' ? '${functionName}-docker' : functionName
+    name: 'ca-function-${solutionSuffix}'
     location: location
     tags: union(allTags, { 'azd-service-name': 'function' })
+    kind: 'functionapp'
     enableTelemetry: enableTelemetry
-    kind: hostingModel == 'container' ? 'functionapp,linux,container' : 'functionapp,linux'
-    serverFarmResourceId: appServicePlan.outputs.resourceId
+    environmentResourceId: containerAppsEnv.outputs.resourceId
+    registries: [
+      {
+        server: containerRegistry.outputs.loginServer
+        identity: userAssignedIdentity.outputs.resourceId
+      }
+    ]
     managedIdentities: {
       systemAssigned: true, userAssignedResourceIds: [userAssignedIdentity.outputs.resourceId]
     }
-    applicationInsightResourceId: enableMonitoring ? applicationInsights!.outputs.resourceId : ''
-    storageAccountName: storageAccount.outputs.name
-    userAssignedIdentityClientId: userAssignedIdentity.outputs.clientId
-    runtimeStack: 'python'
-    runtimeVersion: '3.11'
-    dockerFullImageName: hostingModel == 'container' ? sampleContainerImage : ''
-    virtualNetworkSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.webserverfarmSubnetResourceId : null
-    appSettings: concat(
-      [
-        { name: 'AZURE_CLIENT_ID', value: userAssignedIdentity.outputs.clientId }
-        { name: 'AZURE_UAMI_CLIENT_ID', value: userAssignedIdentity.outputs.clientId }
-        { name: 'AZURE_TENANT_ID', value: subscription().tenantId }
-        { name: 'DOCKER_REGISTRY_SERVER_URL', value: 'https://${containerRegistry.outputs.loginServer}' }
-        { name: 'AZURE_ENVIRONMENT', value: 'production' }
-        { name: 'AZURE_AI_PROJECT_ENDPOINT', value: projectEndpoint }
-        { name: 'AZURE_OPENAI_ENDPOINT', value: aiFoundryEndpoint }
-        { name: 'AZURE_AI_SERVICES_ENDPOINT', value: aiCognitiveServicesEndpoint }
-        { name: 'AZURE_OPENAI_API_VERSION', value: azureOpenAiApiVersion }
-        { name: 'AZURE_OPENAI_EMBEDDING_DEPLOYMENT', value: embeddingModelName }
-        { name: 'AZURE_DB_TYPE', value: databaseType }
-        { name: 'AZURE_INDEX_STORE', value: indexStoreValue }
-        { name: 'AZURE_COSMOS_ENDPOINT', value: isCosmos ? cosmosDb!.outputs.endpoint : '' }
-        { name: 'AZURE_AI_SEARCH_ENDPOINT', value: isCosmos ? aiSearch!.outputs.endpoint : '' }
-        { name: 'AZURE_POSTGRES_ENDPOINT', value: postgresLibpqUri }
-        { name: 'AZURE_POSTGRES_ADMIN_PRINCIPAL_NAME', value: !isCosmos ? userAssignedIdentity.outputs.name : '' }
-        { name: 'AZURE_STORAGE_ACCOUNT_NAME', value: storageAccount!.outputs.name }
-        { name: 'AZURE_DOCUMENTS_CONTAINER', value: documentsContainerName }
-        { name: 'AZURE_DOC_PROCESSING_QUEUE', value: docProcessingQueueName }
-      ],
-      enableMonitoring
-        ? [
-            { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: applicationInsights!.outputs.connectionString }
-          ]
-        : []
-    )
+    workloadProfileName: 'Consumption'
+    ingressTargetPort: 80
+    scaleSettings: {
+      minReplicas: 1
+      maxReplicas: enableScalability ? 5 : 3
+    }
+    containers: [
+      {
+        name: 'function'
+        image: sampleContainerImage
+        resources: {
+          cpu: json(enableScalability ? '1.0' : '0.5')
+          memory: enableScalability ? '2.0Gi' : '1.0Gi'
+        }
+        env: concat(
+          [
+            { name: 'AzureWebJobsStorage__accountName', value: storageAccount.outputs.name }
+            { name: 'AzureWebJobsStorage__credential', value: 'managedidentity' }
+            { name: 'AzureWebJobsStorage__clientId', value: userAssignedIdentity.outputs.clientId }
+            { name: 'WEBSITES_ENABLE_APP_SERVICE_STORAGE', value: 'false' }
+            { name: 'FUNCTIONS_WORKER_RUNTIME', value: 'python' }
+            { name: 'FUNCTIONS_EXTENSION_VERSION', value: '~4' }
+            { name: 'AZURE_CLIENT_ID', value: userAssignedIdentity.outputs.clientId }
+            { name: 'AZURE_UAMI_CLIENT_ID', value: userAssignedIdentity.outputs.clientId }
+            { name: 'AZURE_TENANT_ID', value: subscription().tenantId }
+            { name: 'AZURE_ENVIRONMENT', value: 'production' }
+            { name: 'AZURE_AI_PROJECT_ENDPOINT', value: projectEndpoint }
+            { name: 'AZURE_OPENAI_ENDPOINT', value: aiFoundryEndpoint }
+            { name: 'AZURE_AI_SERVICES_ENDPOINT', value: aiCognitiveServicesEndpoint }
+            { name: 'AZURE_OPENAI_API_VERSION', value: azureOpenAiApiVersion }
+            { name: 'AZURE_OPENAI_EMBEDDING_DEPLOYMENT', value: embeddingModelName }
+            { name: 'AZURE_DB_TYPE', value: databaseType }
+            { name: 'AZURE_INDEX_STORE', value: indexStoreValue }
+            { name: 'AZURE_COSMOS_ENDPOINT', value: isCosmos ? cosmosDb!.outputs.endpoint : '' }
+            { name: 'AZURE_AI_SEARCH_ENDPOINT', value: isCosmos ? aiSearch!.outputs.endpoint : '' }
+            { name: 'AZURE_POSTGRES_ENDPOINT', value: postgresLibpqUri }
+            { name: 'AZURE_POSTGRES_ADMIN_PRINCIPAL_NAME', value: !isCosmos ? userAssignedIdentity.outputs.name : '' }
+            { name: 'AZURE_STORAGE_ACCOUNT_NAME', value: storageAccount!.outputs.name }
+            { name: 'AZURE_DOCUMENTS_CONTAINER', value: documentsContainerName }
+            { name: 'AZURE_DOC_PROCESSING_QUEUE', value: docProcessingQueueName }
+          ],
+          enableMonitoring
+          ? [
+              { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: applicationInsights!.outputs.connectionString }
+            ]
+          : []
+        )
+      }
+    ]
   }
 }
+
+// var functionName = 'func-${solutionSuffix}'
+// var hostingModel = 'container'
+// module functionApp './modules/compute/function-app.bicep' = {
+//   name: hostingModel == 'container' ? '${functionName}-docker' : functionName
+//   params: {
+//     name: hostingModel == 'container' ? '${functionName}-docker' : functionName
+//     location: location
+//     tags: union(allTags, { 'azd-service-name': 'function' })
+//     enableTelemetry: enableTelemetry
+//     kind: hostingModel == 'container' ? 'functionapp,linux,container' : 'functionapp,linux'
+//     serverFarmResourceId: appServicePlan.outputs.resourceId
+//     managedIdentities: {
+//       systemAssigned: true, userAssignedResourceIds: [userAssignedIdentity.outputs.resourceId]
+//     }
+//     applicationInsightResourceId: enableMonitoring ? applicationInsights!.outputs.resourceId : ''
+//     storageAccountName: storageAccount.outputs.name
+//     userAssignedIdentityClientId: userAssignedIdentity.outputs.clientId
+//     runtimeStack: 'python'
+//     runtimeVersion: '3.11'
+//     dockerFullImageName: hostingModel == 'container' ? sampleContainerImage : ''
+//     virtualNetworkSubnetId: enablePrivateNetworking ? virtualNetwork!.outputs.webserverfarmSubnetResourceId : null
+//     appSettings: concat(
+//       [
+//         { name: 'AZURE_CLIENT_ID', value: userAssignedIdentity.outputs.clientId }
+//         { name: 'AZURE_UAMI_CLIENT_ID', value: userAssignedIdentity.outputs.clientId }
+//         { name: 'AZURE_TENANT_ID', value: subscription().tenantId }
+//         { name: 'DOCKER_REGISTRY_SERVER_URL', value: 'https://${containerRegistry.outputs.loginServer}' }
+//         { name: 'AZURE_ENVIRONMENT', value: 'production' }
+//         { name: 'AZURE_AI_PROJECT_ENDPOINT', value: projectEndpoint }
+//         { name: 'AZURE_OPENAI_ENDPOINT', value: aiFoundryEndpoint }
+//         { name: 'AZURE_AI_SERVICES_ENDPOINT', value: aiCognitiveServicesEndpoint }
+//         { name: 'AZURE_OPENAI_API_VERSION', value: azureOpenAiApiVersion }
+//         { name: 'AZURE_OPENAI_EMBEDDING_DEPLOYMENT', value: embeddingModelName }
+//         { name: 'AZURE_DB_TYPE', value: databaseType }
+//         { name: 'AZURE_INDEX_STORE', value: indexStoreValue }
+//         { name: 'AZURE_COSMOS_ENDPOINT', value: isCosmos ? cosmosDb!.outputs.endpoint : '' }
+//         { name: 'AZURE_AI_SEARCH_ENDPOINT', value: isCosmos ? aiSearch!.outputs.endpoint : '' }
+//         { name: 'AZURE_POSTGRES_ENDPOINT', value: postgresLibpqUri }
+//         { name: 'AZURE_POSTGRES_ADMIN_PRINCIPAL_NAME', value: !isCosmos ? userAssignedIdentity.outputs.name : '' }
+//         { name: 'AZURE_STORAGE_ACCOUNT_NAME', value: storageAccount!.outputs.name }
+//         { name: 'AZURE_DOCUMENTS_CONTAINER', value: documentsContainerName }
+//         { name: 'AZURE_DOC_PROCESSING_QUEUE', value: docProcessingQueueName }
+//       ],
+//       enableMonitoring
+//         ? [
+//             { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: applicationInsights!.outputs.connectionString }
+//           ]
+//         : []
+//     )
+//   }
+// }
 
 module eventGridSystemTopic './modules/data/event-grid.bicep' = {
   name: take('modules.event-grid.system-topic.${solutionName}', 64)
@@ -1332,21 +1402,21 @@ var systemAssignedRoleAssignments = union(
     // Function App SI needs blob/queue/account roles for the host lock lease
     // and queue trigger bindings (allowSharedKeyAccess=false forces identity auth)
     {
-      principalId: functionApp.outputs.principalId
+      principalId: frontendContainerApp.outputs.principalId
       resourceId: storageAccount.outputs.resourceId
       roleName: 'Storage Blob Data Owner'
       roleDefinitionId: 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'
       principalType: 'ServicePrincipal'
     }
     {
-      principalId: functionApp.outputs.principalId
+      principalId: frontendContainerApp.outputs.principalId
       resourceId: storageAccount.outputs.resourceId
       roleName: 'Storage Queue Data Contributor'
       roleDefinitionId: '974c5e8b-45b9-4653-ba55-5f855dd0fb88'
       principalType: 'ServicePrincipal'
     }
     {
-      principalId: functionApp.outputs.principalId
+      principalId: frontendContainerApp.outputs.principalId
       resourceId: storageAccount.outputs.resourceId
       roleName: 'Storage Account Contributor'
       roleDefinitionId: '17d1049b-9a84-46fb-8f53-869881c3d3ab'
@@ -1526,10 +1596,10 @@ output AZURE_BACKEND_URL string = 'https://${backendContainerApp.outputs.fqdn}'
 output AZURE_FRONTEND_URL string = 'https://${frontendContainerApp.outputs.fqdn}'
 
 @description('Public URL of the Function App hosting the indexing pipeline.')
-output AZURE_FUNCTION_APP_URL string = 'https://${functionApp.outputs.defaultHostName}'
+output AZURE_FUNCTION_APP_URL string = 'https://${functionContainerApp.outputs.fqdn}'
 
 @description('Function App resource name (used by azd to deploy the function package).')
-output AZURE_FUNCTION_APP_NAME string = functionApp.outputs.name
+output AZURE_FUNCTION_APP_NAME string = functionContainerApp.outputs.name
 
 @description('Container Registry login server.')
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = containerRegistry.outputs.loginServer
