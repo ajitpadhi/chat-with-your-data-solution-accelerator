@@ -59,7 +59,7 @@ param location string
   azd: {
     type: 'location'
     usageName: [
-      'OpenAI.GlobalStandard.gpt-5.4-mini,150'
+      'OpenAI.GlobalStandard.gpt-5.4-mini,50'
       'OpenAI.GlobalStandard.gpt-5-mini,50'
       'OpenAI.Standard.text-embedding-3-large,100'
     ]
@@ -158,16 +158,6 @@ param searchKnowledgeSourceName string = 'cwyd-index-ks'
 
 @description('Optional. Foundry IQ knowledge base / knowledge source REST API version (operator-tunable so the KB protocol can advance without a new image).')
 param searchKnowledgeBaseApiVersion string = '2025-11-01-preview'
-
-// ============================================================================
-// Parameters — Compute
-// ============================================================================
-
-@description('Optional. The container registry login server/endpoint for the container images (for example, an Azure Container Registry endpoint).')
-param containerRegistryEndpoint string = 'cwydcontainerreg.azurecr.io'
-
-@description('Optional. The image tag for the container images.')
-param imageTag string = 'latest'
 
 // ============================================================================
 // Parameters — Existing Resources

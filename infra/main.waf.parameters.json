@@ -3,7 +3,7 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "deploymentFlavor": {
-      "value": "${DEPLOYMENT_FLAVOR=avm}"
+      "value": "${DEPLOYMENT_FLAVOR=avm-waf}"
     },
     "solutionName": {
       "value": "${AZURE_ENV_NAME}"
@@ -17,6 +17,9 @@
     "databaseType": {
       "value": "${DATABASE_TYPE=postgresql}"
     },
+    "ingestionTrigger": {
+      "value": "${INGESTION_TRIGGER=direct_enqueue}"
+    },
     "gptModelName": {
       "value": "${AZURE_GPT_MODEL_NAME=gpt-5.4-mini}"
     },
@@ -27,7 +30,7 @@
       "value": "${AZURE_GPT_MODEL_DEPLOYMENT_TYPE=GlobalStandard}"
     },
     "gptModelCapacity": {
-      "value": "${AZURE_GPT_MODEL_CAPACITY=150}"
+      "value": "${AZURE_GPT_MODEL_CAPACITY=50}"
     },
     "reasoningModelName": {
       "value": "${AZURE_REASONING_MODEL_NAME=gpt-5-mini}"
@@ -59,15 +62,6 @@
     "azureAiAgentApiVersion": {
       "value": "${AZURE_AI_AGENT_API_VERSION=2025-05-01}"
     },
-    "containerRegistryEndpoint": {
-      "value": "${AZURE_CONTAINER_REGISTRY_ENDPOINT=testapreg.azurecr.io}"
-    },
-    "imageTag": {
-      "value": "${AZURE_IMAGE_TAG=cwyd}"
-    },
-    "hostingModel": {
-      "value": "${AZURE_APP_SERVICE_HOSTING_MODEL=container}"
-    },
     "existingLogAnalyticsWorkspaceId": {
       "value": "${AZURE_ENV_LOG_ANALYTICS_WORKSPACE_ID}"
     },
@@ -78,16 +72,16 @@
       "value": "${ENABLE_TELEMETRY=true}"
     },
     "enableMonitoring": {
-      "value": true
+      "value": "${ENABLE_MONITORING=false}"
     },
     "enableScalability": {
-      "value": true
+      "value": "${ENABLE_SCALABILITY=true}"
     },
     "enableRedundancy": {
       "value": "${ENABLE_REDUNDANCY=false}"
     },
     "enablePrivateNetworking": {
-      "value": true
+      "value": "${ENABLE_PRIVATE_NETWORKING=true}"
     },
     "vmAdminUsername": {
       "value": "${AZURE_ENV_VM_ADMIN_USERNAME}"

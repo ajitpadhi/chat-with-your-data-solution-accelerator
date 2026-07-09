@@ -19,39 +19,9 @@ param solutionName string = 'cwyd'
 @description('Optional. Short unique suffix appended to global resource names. Defaults to a 5-char hash of subscription + RG + solution name.')
 param solutionUniqueText string = take(uniqueString(subscription().id, resourceGroup().name, solutionName), 5)
 
-@allowed([
-  'australiaeast'
-  'eastus2'
-  'japaneast'
-  'uksouth'
-])
-@metadata({ azd: { type: 'location' } })
 @description('Required. Azure region for non-AI resources (Container Apps, App Service, Functions, Storage, Cosmos/Postgres). Restricted to the 4 regions where ALL three redundancy guarantees hold simultaneously: PostgreSQL Flexible Server ZoneRedundant HA (3 AZs), Cosmos DB automatic failover with paired-region replicas, and Storage GZRS. Independent of azureAiServiceLocation, which selects the model-availability region. Source: https://learn.microsoft.com/azure/reliability/regions-list and https://learn.microsoft.com/azure/postgresql/flexible-server/overview#azure-regions')
 param location string
 
-@allowed([
-  'australiaeast'
-  'canadaeast'
-  'eastus2'
-  'japaneast'
-  'koreacentral'
-  'polandcentral'
-  'swedencentral'
-  'switzerlandnorth'
-  'uaenorth'
-  'uksouth'
-  'westus3'
-])
-@metadata({
-  azd: {
-    type: 'location'
-    usageName: [
-      'OpenAI.GlobalStandard.gpt-5.1,150'
-      'OpenAI.GlobalStandard.o4-mini,50'
-      'OpenAI.Standard.text-embedding-3-large,100'
-    ]
-  }
-})
 @description('Required. Region for AI Services / Foundry deployments. Restricted to regions with GPT-5.1 GlobalStandard availability.')
 param azureAiServiceLocation string
 
@@ -59,17 +29,9 @@ param azureAiServiceLocation string
 // Parameters — Database & Ingestion
 // ============================================================================
 
-@allowed([
-  'cosmosdb'
-  'postgresql'
-])
 @description('Required. Selects BOTH the chat-history backend AND the vector index store. CosmosDB: Cosmos DB + Azure AI Search. PostgreSQL: PostgreSQL Flexible Server with pgvector (Azure AI Search is NOT deployed). Locked at deploy time.')
 param databaseType string = 'cosmosdb'
 
-@allowed([
-  'direct_enqueue'
-  'event_grid'
-])
 @description('Optional. How an uploaded document is picked up for indexing. direct_enqueue: the backend admin upload enqueues the doc-processing message itself (works without an Event Grid subscription). event_grid: a storage Event Grid subscription fans BlobCreated/BlobDeleted to the blob-events queue and the blob_event Function translates each (create -> ingest, delete -> de-index), so the backend writes the blob only (no double-ingest). Flip to event_grid only after the blob_event Function blueprint is deployed.')
 param ingestionTrigger string = 'direct_enqueue'
 
@@ -84,10 +46,6 @@ param gptModelName string = 'gpt-5.1'
 @description('Optional. Primary chat model version.')
 param gptModelVersion string = '2025-11-13'
 
-@allowed([
-  'Standard'
-  'GlobalStandard'
-])
 @description('Optional. SKU for the primary chat model deployment.')
 param gptModelDeploymentType string = 'GlobalStandard'
 
@@ -102,10 +60,6 @@ param reasoningModelName string = 'o4-mini'
 @description('Optional. Reasoning model version.')
 param reasoningModelVersion string = '2025-04-16'
 
-@allowed([
-  'Standard'
-  'GlobalStandard'
-])
 @description('Optional. SKU for the reasoning model deployment.')
 param reasoningModelDeploymentType string = 'GlobalStandard'
 
@@ -120,10 +74,6 @@ param embeddingModelName string = 'text-embedding-3-large'
 @description('Optional. Embedding model version.')
 param embeddingModelVersion string = '1'
 
-@allowed([
-  'Standard'
-  'GlobalStandard'
-])
 @description('Optional. SKU for the embedding model deployment.')
 param embeddingModelDeploymentType string = 'Standard'
 
@@ -148,7 +98,6 @@ param searchKnowledgeBaseApiVersion string = '2025-11-01-preview'
 
 @description('Optional. Deploy Application Insights and wire diagnostics. Log Analytics is always deployed because the Container Apps Environment requires it.')
 param enableMonitoring bool = false
-
 
 // ============================================================================
 // Parameters — Existing Resources
@@ -243,9 +192,6 @@ var defaultOpenAiDeployments = [
 ]
 
 // ----- Deterministic resource names (mirror each module's naming rule) -----
-// Used by `existing` references whose .id must be calculable at the start of
-// deployment (role assignment / child-resource name + scope cannot depend on a
-// runtime module output). Ordering is enforced with explicit dependsOn.
 var useExistingAIProject = !empty(existingFoundryProjectResourceId)
 var aiFoundrySubscriptionId = useExistingAIProject ? split(existingFoundryProjectResourceId, '/')[2] : subscription().subscriptionId
 var aiFoundryResourceGroupName = useExistingAIProject ? split(existingFoundryProjectResourceId, '/')[4] : resourceGroup().name
@@ -668,7 +614,7 @@ module functionApp './modules/compute/function-app.bicep' = {
     location: location
     tags: union(allTags, { 'azd-service-name': 'function' })
     kind: 'functionapp,linux,container'
-    dockerFullImageName: '${containerRegistryEndpoint}/rag-functions:${imageTag}'
+    dockerFullImageName: sampleContainerImage
     serverFarmResourceId: appServicePlan.outputs.resourceId
     storageAccountName: storageAccount.outputs.name
     userAssignedIdentityClientId: userAssignedIdentity.outputs.clientId

@@ -5,8 +5,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.43.8.12551",
-      "templateHash": "15779612913790531398"
+      "version": "0.44.1.10279",
+      "templateHash": "4665533661643024277"
     }
   },
   "parameters": {
@@ -29,53 +29,19 @@
     },
     "location": {
       "type": "string",
-      "allowedValues": [
-        "australiaeast",
-        "eastus2",
-        "japaneast",
-        "uksouth"
-      ],
       "metadata": {
-        "azd": {
-          "type": "location"
-        },
         "description": "Required. Azure region for non-AI resources (Container Apps, App Service, Functions, Storage, Cosmos/Postgres). Restricted to the 4 regions where ALL three redundancy guarantees hold simultaneously: PostgreSQL Flexible Server ZoneRedundant HA (3 AZs), Cosmos DB automatic failover with paired-region replicas, and Storage GZRS. Independent of azureAiServiceLocation, which selects the model-availability region. Source: https://learn.microsoft.com/azure/reliability/regions-list and https://learn.microsoft.com/azure/postgresql/flexible-server/overview#azure-regions"
       }
     },
     "azureAiServiceLocation": {
       "type": "string",
-      "allowedValues": [
-        "australiaeast",
-        "canadaeast",
-        "eastus2",
-        "japaneast",
-        "koreacentral",
-        "polandcentral",
-        "swedencentral",
-        "switzerlandnorth",
-        "uaenorth",
-        "uksouth",
-        "westus3"
-      ],
       "metadata": {
-        "azd": {
-          "type": "location",
-          "usageName": [
-            "OpenAI.GlobalStandard.gpt-5.1,150",
-            "OpenAI.GlobalStandard.o4-mini,50",
-            "OpenAI.Standard.text-embedding-3-large,100"
-          ]
-        },
         "description": "Required. Region for AI Services / Foundry deployments. Restricted to regions with GPT-5.1 GlobalStandard availability."
       }
     },
     "databaseType": {
       "type": "string",
       "defaultValue": "cosmosdb",
-      "allowedValues": [
-        "cosmosdb",
-        "postgresql"
-      ],
       "metadata": {
         "description": "Required. Selects BOTH the chat-history backend AND the vector index store. CosmosDB: Cosmos DB + Azure AI Search. PostgreSQL: PostgreSQL Flexible Server with pgvector (Azure AI Search is NOT deployed). Locked at deploy time."
       }
@@ -83,10 +49,6 @@
     "ingestionTrigger": {
       "type": "string",
       "defaultValue": "direct_enqueue",
-      "allowedValues": [
-        "direct_enqueue",
-        "event_grid"
-      ],
       "metadata": {
         "description": "Optional. How an uploaded document is picked up for indexing. direct_enqueue: the backend admin upload enqueues the doc-processing message itself (works without an Event Grid subscription). event_grid: a storage Event Grid subscription fans BlobCreated/BlobDeleted to the blob-events queue and the blob_event Function translates each (create -> ingest, delete -> de-index), so the backend writes the blob only (no double-ingest). Flip to event_grid only after the blob_event Function blueprint is deployed."
       }
@@ -109,10 +71,6 @@
     "gptModelDeploymentType": {
       "type": "string",
       "defaultValue": "GlobalStandard",
-      "allowedValues": [
-        "Standard",
-        "GlobalStandard"
-      ],
       "metadata": {
         "description": "Optional. SKU for the primary chat model deployment."
       }
@@ -143,10 +101,6 @@
     "reasoningModelDeploymentType": {
       "type": "string",
       "defaultValue": "GlobalStandard",
-      "allowedValues": [
-        "Standard",
-        "GlobalStandard"
-      ],
       "metadata": {
         "description": "Optional. SKU for the reasoning model deployment."
       }
@@ -177,10 +131,6 @@
     "embeddingModelDeploymentType": {
       "type": "string",
       "defaultValue": "Standard",
-      "allowedValues": [
-        "Standard",
-        "GlobalStandard"
-      ],
       "metadata": {
         "description": "Optional. SKU for the embedding model deployment."
       }
@@ -235,20 +185,6 @@
         "description": "Optional. Deploy Application Insights and wire diagnostics. Log Analytics is always deployed because the Container Apps Environment requires it."
       }
     },
-    "containerRegistryEndpoint": {
-      "type": "string",
-      "defaultValue": "cwydcontainerreg.azurecr.io",
-      "metadata": {
-        "description": "Optional. The container registry login server/endpoint for the container images (for example, an Azure Container Registry endpoint)."
-      }
-    },
-    "imageTag": {
-      "type": "string",
-      "defaultValue": "latest",
-      "metadata": {
-        "description": "Optional. The image tag for the container images."
-      }
-    },
     "existingLogAnalyticsWorkspaceId": {
       "type": "string",
       "defaultValue": "",
@@ -295,6 +231,7 @@
     "docProcessingQueueName": "doc-processing",
     "blobEventsQueueName": "blob-events",
     "documentsContainerName": "documents",
+    "sampleContainerImage": "mcr.microsoft.com/k8se/quickstart:latest",
     "storageQueueNames": [
       "doc-processing",
       "doc-processing-poison",
@@ -403,8 +340,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "8284042434160589947"
+              "version": "0.44.1.10279",
+              "templateHash": "18283443262150133120"
             }
           },
           "parameters": {
@@ -504,8 +441,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "969553531695631445"
+              "version": "0.44.1.10279",
+              "templateHash": "18362209914173142473"
             }
           },
           "parameters": {
@@ -636,8 +573,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "3276019876379547678"
+              "version": "0.44.1.10279",
+              "templateHash": "3199910078817503702"
             }
           },
           "parameters": {
@@ -797,8 +734,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "7450334128816260704"
+              "version": "0.44.1.10279",
+              "templateHash": "11426307275851055409"
             }
           },
           "parameters": {
@@ -924,8 +861,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "10170653721383907908"
+              "version": "0.44.1.10279",
+              "templateHash": "18246185807871991410"
             }
           },
           "parameters": {
@@ -1172,8 +1109,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "8590492508744195961"
+              "version": "0.44.1.10279",
+              "templateHash": "10180502016624897684"
             }
           },
           "parameters": {
@@ -1302,8 +1239,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "3997607582623445408"
+              "version": "0.44.1.10279",
+              "templateHash": "5513864769288877005"
             }
           },
           "parameters": {
@@ -1493,8 +1430,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "3997607582623445408"
+              "version": "0.44.1.10279",
+              "templateHash": "5513864769288877005"
             }
           },
           "parameters": {
@@ -1679,8 +1616,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "5544705592026127764"
+              "version": "0.44.1.10279",
+              "templateHash": "5979892336048972781"
             }
           },
           "parameters": {
@@ -1868,8 +1805,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "11405874480605370927"
+                      "version": "0.44.1.10279",
+                      "templateHash": "2672261376096761553"
                     }
                   },
                   "parameters": {
@@ -2087,8 +2024,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "386381294886679564"
+              "version": "0.44.1.10279",
+              "templateHash": "14126031085782385090"
             }
           },
           "parameters": {
@@ -2263,8 +2200,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "2468142010748627117"
+              "version": "0.44.1.10279",
+              "templateHash": "5195208660794667624"
             }
           },
           "parameters": {
@@ -2510,8 +2447,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "14953893349373721534"
+              "version": "0.44.1.10279",
+              "templateHash": "18081889173683611818"
             }
           },
           "parameters": {
@@ -2729,8 +2666,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "4450680400131203993"
+              "version": "0.44.1.10279",
+              "templateHash": "17424919820056106971"
             }
           },
           "parameters": {
@@ -2963,6 +2900,189 @@
         "userAssignedIdentity"
       ]
     },
+    "containerRegistry": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[take(format('module.container-registry.{0}', parameters('solutionName')), 64)]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "solutionName": {
+            "value": "[variables('solutionSuffix')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          },
+          "sku": {
+            "value": "Basic"
+          },
+          "identity": {
+            "value": {
+              "userAssignedResourceIds": [
+                "[reference('userAssignedIdentity').outputs.resourceId.value]"
+              ]
+            }
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "6730962297935458636"
+            }
+          },
+          "parameters": {
+            "solutionName": {
+              "type": "string",
+              "metadata": {
+                "description": "Solution name used for naming convention."
+              }
+            },
+            "name": {
+              "type": "string",
+              "defaultValue": "[replace(format('cr{0}', parameters('solutionName')), '-', '')]",
+              "metadata": {
+                "description": "Name of the container registry."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for deployment."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Resource tags."
+              }
+            },
+            "sku": {
+              "type": "string",
+              "defaultValue": "Standard",
+              "allowedValues": [
+                "Basic",
+                "Standard",
+                "Premium"
+              ],
+              "metadata": {
+                "description": "SKU for the container registry."
+              }
+            },
+            "adminUserEnabled": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Enable admin user."
+              }
+            },
+            "publicNetworkAccess": {
+              "type": "string",
+              "defaultValue": "Enabled",
+              "allowedValues": [
+                "Enabled",
+                "Disabled"
+              ],
+              "metadata": {
+                "description": "Public network access setting."
+              }
+            },
+            "exportPolicyStatus": {
+              "type": "string",
+              "defaultValue": "enabled",
+              "metadata": {
+                "description": "Export policy status."
+              }
+            },
+            "retentionPolicyStatus": {
+              "type": "string",
+              "defaultValue": "disabled",
+              "metadata": {
+                "description": "Retention policy status."
+              }
+            },
+            "identity": {
+              "type": "object",
+              "defaultValue": {
+                "type": "SystemAssigned"
+              },
+              "metadata": {
+                "description": "Optional. Managed identity configuration for the resource."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ContainerRegistry/registries",
+              "apiVersion": "2025-04-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "[parameters('sku')]"
+              },
+              "identity": "[parameters('identity')]",
+              "properties": {
+                "adminUserEnabled": "[parameters('adminUserEnabled')]",
+                "publicNetworkAccess": "[parameters('publicNetworkAccess')]",
+                "dataEndpointEnabled": false,
+                "networkRuleBypassOptions": "AzureServices",
+                "policies": {
+                  "exportPolicy": {
+                    "status": "[parameters('exportPolicyStatus')]"
+                  },
+                  "retentionPolicy": {
+                    "status": "[parameters('retentionPolicyStatus')]",
+                    "days": 7
+                  },
+                  "trustPolicy": {
+                    "status": "disabled",
+                    "type": "Notary"
+                  }
+                },
+                "zoneRedundancy": "Disabled"
+              }
+            }
+          ],
+          "outputs": {
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "The name of the container registry."
+              },
+              "value": "[parameters('name')]"
+            },
+            "loginServer": {
+              "type": "string",
+              "metadata": {
+                "description": "The login server URL."
+              },
+              "value": "[reference(resourceId('Microsoft.ContainerRegistry/registries', parameters('name')), '2025-04-01').loginServer]"
+            },
+            "resourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "The resource ID of the container registry."
+              },
+              "value": "[resourceId('Microsoft.ContainerRegistry/registries', parameters('name'))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "userAssignedIdentity"
+      ]
+    },
     "containerAppsEnv": {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -2990,8 +3110,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "6021762781018875862"
+              "version": "0.44.1.10279",
+              "templateHash": "4755624393925218963"
             }
           },
           "parameters": {
@@ -3143,6 +3263,14 @@
               }
             }
           },
+          "registries": {
+            "value": [
+              {
+                "server": "[reference('containerRegistry').outputs.loginServer.value]",
+                "identity": "[reference('userAssignedIdentity').outputs.resourceId.value]"
+              }
+            ]
+          },
           "workloadProfileName": {
             "value": "Consumption"
           },
@@ -3159,7 +3287,7 @@
             "value": [
               {
                 "name": "backend",
-                "image": "[format('{0}/rag-backend:{1}', parameters('containerRegistryEndpoint'), parameters('imageTag'))]",
+                "image": "[variables('sampleContainerImage')]",
                 "resources": {
                   "cpu": "[json('0.5')]",
                   "memory": "1.0Gi"
@@ -3176,8 +3304,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "72048432286064874"
+              "version": "0.44.1.10279",
+              "templateHash": "17370346544281807053"
             }
           },
           "parameters": {
@@ -3381,6 +3509,7 @@
         "aiSearch",
         "applicationInsights",
         "containerAppsEnv",
+        "containerRegistry",
         "contentSafety",
         "cosmosDb",
         "existingAIProject",
@@ -3389,169 +3518,6 @@
         "storageAccount",
         "userAssignedIdentity"
       ]
-    },
-    "appServicePlan": {
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
-      "name": "[take(format('module.app-service-plan.{0}', parameters('solutionName')), 64)]",
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "parameters": {
-          "solutionName": {
-            "value": "[variables('solutionSuffix')]"
-          },
-          "location": {
-            "value": "[parameters('location')]"
-          },
-          "tags": {
-            "value": "[variables('allTags')]"
-          },
-          "skuName": {
-            "value": "B3"
-          }
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "1.0.0.0",
-          "metadata": {
-            "_generator": {
-              "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "15924018586594831869"
-            }
-          },
-          "parameters": {
-            "solutionName": {
-              "type": "string",
-              "metadata": {
-                "description": "Solution name suffix used to derive the resource name."
-              }
-            },
-            "name": {
-              "type": "string",
-              "defaultValue": "[format('asp-{0}', parameters('solutionName'))]",
-              "metadata": {
-                "description": "Name of the App Service Plan."
-              }
-            },
-            "location": {
-              "type": "string",
-              "metadata": {
-                "description": "Azure region for the resource."
-              }
-            },
-            "tags": {
-              "type": "object",
-              "defaultValue": {},
-              "metadata": {
-                "description": "Tags to apply to the resource."
-              }
-            },
-            "skuName": {
-              "type": "string",
-              "defaultValue": "B2",
-              "allowedValues": [
-                "F1",
-                "D1",
-                "B1",
-                "B2",
-                "B3",
-                "S1",
-                "S2",
-                "S3",
-                "P1",
-                "P2",
-                "P3",
-                "P4",
-                "P0v3",
-                "P0v4",
-                "P1v3",
-                "P1v4",
-                "P2v3",
-                "P3v3"
-              ],
-              "metadata": {
-                "description": "SKU name for the App Service Plan."
-              }
-            },
-            "reserved": {
-              "type": "bool",
-              "defaultValue": true,
-              "metadata": {
-                "description": "Whether the plan is Linux-based."
-              }
-            },
-            "kind": {
-              "type": "string",
-              "defaultValue": "linux",
-              "metadata": {
-                "description": "Kind of the App Service Plan."
-              }
-            },
-            "skuCapacity": {
-              "type": "int",
-              "defaultValue": 1,
-              "metadata": {
-                "description": "Number of instances (workers)."
-              }
-            },
-            "zoneRedundant": {
-              "type": "bool",
-              "defaultValue": false,
-              "metadata": {
-                "description": "Enable zone redundancy. Requires Premium SKU (P1v3+)."
-              }
-            },
-            "identity": {
-              "type": "object",
-              "defaultValue": {
-                "type": "SystemAssigned"
-              },
-              "metadata": {
-                "description": "Optional. Managed identity configuration for the resource."
-              }
-            }
-          },
-          "resources": [
-            {
-              "type": "Microsoft.Web/serverfarms",
-              "apiVersion": "2025-05-01",
-              "name": "[parameters('name')]",
-              "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]",
-              "kind": "[parameters('kind')]",
-              "sku": {
-                "name": "[parameters('skuName')]",
-                "capacity": "[parameters('skuCapacity')]"
-              },
-              "properties": {
-                "reserved": "[parameters('reserved')]",
-                "zoneRedundant": "[parameters('zoneRedundant')]"
-              },
-              "identity": "[parameters('identity')]"
-            }
-          ],
-          "outputs": {
-            "resourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Resource ID of the App Service Plan."
-              },
-              "value": "[resourceId('Microsoft.Web/serverfarms', parameters('name'))]"
-            },
-            "name": {
-              "type": "string",
-              "metadata": {
-                "description": "Name of the App Service Plan."
-              },
-              "value": "[parameters('name')]"
-            }
-          }
-        }
-      }
     },
     "frontendContainerApp": {
       "type": "Microsoft.Resources/deployments",
@@ -3583,6 +3549,14 @@
               }
             }
           },
+          "registries": {
+            "value": [
+              {
+                "server": "[reference('containerRegistry').outputs.loginServer.value]",
+                "identity": "[reference('userAssignedIdentity').outputs.resourceId.value]"
+              }
+            ]
+          },
           "workloadProfileName": {
             "value": "Consumption"
           },
@@ -3599,12 +3573,12 @@
             "value": [
               {
                 "name": "frontend",
-                "image": "[format('{0}/rag-frontend:{1}', parameters('containerRegistryEndpoint'), parameters('imageTag'))]",
+                "image": "[variables('sampleContainerImage')]",
                 "resources": {
                   "cpu": "[json('0.5')]",
                   "memory": "1.0Gi"
                 },
-                "env": "[concat(createArray(createObject('name', 'VITE_BACKEND_URL', 'value', format('https://{0}', reference('backendContainerApp').outputs.fqdn.value))), if(parameters('enableMonitoring'), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', if(parameters('enableMonitoring'), reference('applicationInsights').outputs.connectionString.value, ''))), createArray()))]"
+                "env": "[concat(createArray(createObject('name', 'VITE_BACKEND_URL', 'value', format('https://{0}', reference('backendContainerApp').outputs.fqdn.value)), createObject('name', 'BACKEND_API_URL', 'value', format('https://{0}', reference('backendContainerApp').outputs.fqdn.value))), if(parameters('enableMonitoring'), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', if(parameters('enableMonitoring'), reference('applicationInsights').outputs.connectionString.value, ''))), createArray()))]"
               }
             ]
           }
@@ -3616,8 +3590,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "72048432286064874"
+              "version": "0.44.1.10279",
+              "templateHash": "17370346544281807053"
             }
           },
           "parameters": {
@@ -3819,8 +3793,172 @@
         "applicationInsights",
         "backendContainerApp",
         "containerAppsEnv",
+        "containerRegistry",
         "userAssignedIdentity"
       ]
+    },
+    "appServicePlan": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[take(format('module.app-service-plan.{0}', parameters('solutionName')), 64)]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "solutionName": {
+            "value": "[variables('solutionSuffix')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('allTags')]"
+          },
+          "skuName": {
+            "value": "B3"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "8496143357348681814"
+            }
+          },
+          "parameters": {
+            "solutionName": {
+              "type": "string",
+              "metadata": {
+                "description": "Solution name suffix used to derive the resource name."
+              }
+            },
+            "name": {
+              "type": "string",
+              "defaultValue": "[format('asp-{0}', parameters('solutionName'))]",
+              "metadata": {
+                "description": "Name of the App Service Plan."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for the resource."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Tags to apply to the resource."
+              }
+            },
+            "skuName": {
+              "type": "string",
+              "defaultValue": "B2",
+              "allowedValues": [
+                "F1",
+                "D1",
+                "B1",
+                "B2",
+                "B3",
+                "S1",
+                "S2",
+                "S3",
+                "P1",
+                "P2",
+                "P3",
+                "P4",
+                "P0v3",
+                "P0v4",
+                "P1v3",
+                "P1v4",
+                "P2v3",
+                "P3v3"
+              ],
+              "metadata": {
+                "description": "SKU name for the App Service Plan."
+              }
+            },
+            "reserved": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Whether the plan is Linux-based."
+              }
+            },
+            "kind": {
+              "type": "string",
+              "defaultValue": "linux",
+              "metadata": {
+                "description": "Kind of the App Service Plan."
+              }
+            },
+            "skuCapacity": {
+              "type": "int",
+              "defaultValue": 1,
+              "metadata": {
+                "description": "Number of instances (workers)."
+              }
+            },
+            "zoneRedundant": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Enable zone redundancy. Requires Premium SKU (P1v3+)."
+              }
+            },
+            "identity": {
+              "type": "object",
+              "defaultValue": {
+                "type": "SystemAssigned"
+              },
+              "metadata": {
+                "description": "Optional. Managed identity configuration for the resource."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/serverfarms",
+              "apiVersion": "2025-05-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "kind": "[parameters('kind')]",
+              "sku": {
+                "name": "[parameters('skuName')]",
+                "capacity": "[parameters('skuCapacity')]"
+              },
+              "properties": {
+                "reserved": "[parameters('reserved')]",
+                "zoneRedundant": "[parameters('zoneRedundant')]"
+              },
+              "identity": "[parameters('identity')]"
+            }
+          ],
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the App Service Plan."
+              },
+              "value": "[resourceId('Microsoft.Web/serverfarms', parameters('name'))]"
+            },
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the App Service Plan."
+              },
+              "value": "[parameters('name')]"
+            }
+          }
+        }
+      }
     },
     "functionApp": {
       "type": "Microsoft.Resources/deployments",
@@ -3845,7 +3983,7 @@
             "value": "functionapp,linux,container"
           },
           "dockerFullImageName": {
-            "value": "[format('{0}/rag-functions:{1}', parameters('containerRegistryEndpoint'), parameters('imageTag'))]"
+            "value": "[variables('sampleContainerImage')]"
           },
           "serverFarmResourceId": {
             "value": "[reference('appServicePlan').outputs.resourceId.value]"
@@ -3880,8 +4018,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "15397042214208124525"
+              "version": "0.44.1.10279",
+              "templateHash": "3021355990104297258"
             }
           },
           "parameters": {
@@ -4115,8 +4253,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "17266479511572207397"
+              "version": "0.44.1.10279",
+              "templateHash": "15676310630249646620"
             }
           },
           "parameters": {
@@ -4316,8 +4454,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "12962544617791186683"
+              "version": "0.44.1.10279",
+              "templateHash": "7646792469243638054"
             }
           },
           "parameters": {
@@ -4450,7 +4588,8 @@
               "storageBlobDataContributor": "ba92f5b4-2d11-453d-a403-e96b0029c9fe",
               "storageBlobDataOwner": "b7e6dc6d-f1e8-4753-8033-0f276bb0955b",
               "storageQueueDataContributor": "974c5e8b-45b9-4653-ba55-5f855dd0fb88",
-              "storageAccountContributor": "17d1049b-9a84-46fb-8f53-869881c3d3ab"
+              "storageAccountContributor": "17d1049b-9a84-46fb-8f53-869881c3d3ab",
+              "acrPullRoleId": "7f951dda-4ed3-4680-a7ca-43fe172d538d"
             },
             "cosmosDataContributorRoleId": "00000000-0000-0000-0000-000000000002",
             "foundryRoleAssignmentsBase": "[union(createArray(createObject('principalId', parameters('uamiPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').cognitiveServicesOpenAIUser), createObject('principalId', parameters('uamiPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').cognitiveServicesUser), createObject('principalId', parameters('uamiPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').azureAiUser), createObject('principalId', parameters('deployingUserPrincipalId'), 'principalType', parameters('deployingUserPrincipalType'), 'roleDefinitionId', variables('roleIds').cognitiveServicesUser), createObject('principalId', parameters('deployingUserPrincipalId'), 'principalType', parameters('deployingUserPrincipalType'), 'roleDefinitionId', variables('roleIds').azureAiUser)), if(parameters('isCosmos'), createArray(createObject('principalId', parameters('searchPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').cognitiveServicesUser), createObject('principalId', parameters('searchPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').cognitiveServicesOpenAIUser)), createArray()))]",
@@ -4470,7 +4609,13 @@
                 "roleDefinitionId": "[variables('roleIds').cognitiveServicesUser]"
               }
             ],
-            "registryRoleAssignments": [],
+            "registryRoleAssignments": [
+              {
+                "principalId": "[parameters('uamiPrincipalId')]",
+                "principalType": "ServicePrincipal",
+                "roleDefinitionId": "[variables('roleIds').acrPullRoleId]"
+              }
+            ],
             "storageRoleAssignments": "[union(createArray(createObject('principalId', parameters('uamiPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').storageBlobDataContributor), createObject('principalId', parameters('uamiPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').storageQueueDataContributor), createObject('principalId', parameters('uamiPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').storageAccountContributor), createObject('principalId', parameters('foundryProjectPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').storageBlobDataContributor), createObject('principalId', parameters('functionPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').storageBlobDataOwner), createObject('principalId', parameters('functionPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').storageQueueDataContributor), createObject('principalId', parameters('functionPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').storageAccountContributor), createObject('principalId', parameters('deployingUserPrincipalId'), 'principalType', parameters('deployingUserPrincipalType'), 'roleDefinitionId', variables('roleIds').storageBlobDataContributor)), if(parameters('isCosmos'), createArray(createObject('principalId', parameters('searchPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').storageBlobDataContributor)), createArray()))]",
             "searchRoleAssignments": "[if(parameters('isCosmos'), createArray(createObject('principalId', parameters('uamiPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').searchIndexDataContributor), createObject('principalId', parameters('uamiPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').searchServiceContributor), createObject('principalId', parameters('foundryProjectPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').searchIndexDataReader), createObject('principalId', parameters('foundryProjectPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').searchIndexDataContributor), createObject('principalId', parameters('foundryProjectPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').searchServiceContributor), createObject('principalId', parameters('foundryAccountPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').searchIndexDataContributor), createObject('principalId', parameters('foundryAccountPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').searchIndexDataReader), createObject('principalId', parameters('foundryAccountPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').searchServiceContributor), createObject('principalId', parameters('deployingUserPrincipalId'), 'principalType', parameters('deployingUserPrincipalType'), 'roleDefinitionId', variables('roleIds').searchIndexDataContributor), createObject('principalId', parameters('deployingUserPrincipalId'), 'principalType', parameters('deployingUserPrincipalType'), 'roleDefinitionId', variables('roleIds').searchServiceContributor)), createArray())]",
             "cosmosSqlRoleAssignments": "[if(parameters('isCosmos'), createArray(createObject('principalId', parameters('uamiPrincipalId'), 'roleDefinitionId', variables('cosmosDataContributorRoleId'))), createArray())]"
@@ -4620,8 +4765,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "8140699401604799898"
+                      "version": "0.44.1.10279",
+                      "templateHash": "3414629451173950961"
                     }
                   },
                   "parameters": {
@@ -4978,6 +5123,20 @@
         "description": "Function App name."
       },
       "value": "[reference('functionApp').outputs.name.value]"
+    },
+    "AZURE_CONTAINER_REGISTRY_ENDPOINT": {
+      "type": "string",
+      "metadata": {
+        "description": "Container Registry login server."
+      },
+      "value": "[reference('containerRegistry').outputs.loginServer.value]"
+    },
+    "AZURE_CONTAINER_REGISTRY_NAME": {
+      "type": "string",
+      "metadata": {
+        "description": "Container Registry resource name."
+      },
+      "value": "[reference('containerRegistry').outputs.name.value]"
     },
     "AZURE_APP_INSIGHTS_CONNECTION_STRING": {
       "type": "string",
