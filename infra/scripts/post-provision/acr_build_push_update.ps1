@@ -145,6 +145,33 @@ function Get-DeploymentOutput {
     }
 }
 
+# ---------------------------------------------------------------------------
+# ACR public access helpers (WAF auto-detect, try/finally pattern from CGSA)
+# ---------------------------------------------------------------------------
+$script:AcrOpenedForBuild = $false
+
+function Enable-AcrPublicAccess {
+    $publicAccess = az acr show -n $AcrName --query publicNetworkAccess --output tsv 2>$null
+    if ($publicAccess -eq 'Disabled') {
+        Write-Host "===== ACR public access is disabled (WAF mode) - temporarily enabling for build =====" -ForegroundColor Yellow
+        az acr update -n $AcrName --public-network-enabled true --default-action Allow --output none --only-show-errors
+        if ($LASTEXITCODE -ne 0) { Write-Error "Failed to enable ACR public access."; exit 1 }
+        $script:AcrOpenedForBuild = $true
+        Write-Host "Waiting 45s for network rule propagation..." -ForegroundColor Yellow
+        Start-Sleep -Seconds 45
+    }
+}
+
+function Restore-AcrPublicAccess {
+    if ($script:AcrOpenedForBuild) {
+        Write-Host "===== Re-locking ACR (disabling public network access) =====" -ForegroundColor Yellow
+        az acr update -n $AcrName --public-network-enabled false --default-action Deny --output none --only-show-errors
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Failed to re-disable ACR public access. Re-lock manually: az acr update -n $AcrName --public-network-enabled false --default-action Deny"
+        }
+    }
+}
+
 # -------------------------------------------------------
 # Build and push
 # -------------------------------------------------------
@@ -153,19 +180,25 @@ Write-Host "--- REMOTE BUILD (ACR Tasks - no local Docker required) ---"
 Write-Host "    Note: your Azure identity needs Contributor or AcrPush access on the ACR."
 Write-Host ""
 
-foreach ($img in $Images) {
-    $FullTag    = "$($img.Name):${Tag}"
-    $Dockerfile = Join-Path $RepoRoot $img.Dockerfile
+try {
+    Enable-AcrPublicAccess
 
-    Write-Host "[$($img.Name)] Submitting remote build to ACR '$AcrName' ..."
-    az acr build `
-        --registry  $AcrName `
-        --image     $FullTag `
-        --file      $Dockerfile `
-        $RepoRoot
-    if ($LASTEXITCODE -ne 0) { Write-Error "Remote build failed for $($img.Name)."; exit 1 }
+    foreach ($img in $Images) {
+        $FullTag    = "$($img.Name):${Tag}"
+        $Dockerfile = Join-Path $RepoRoot $img.Dockerfile
 
-    Write-Host "[$($img.Name)] OK Done"
+        Write-Host "[$($img.Name)] Submitting remote build to ACR '$AcrName' ..."
+        az acr build `
+            --registry  $AcrName `
+            --image     $FullTag `
+            --file      $Dockerfile `
+            $RepoRoot
+        if ($LASTEXITCODE -ne 0) { Write-Error "Remote build failed for $($img.Name)."; exit 1 }
+
+        Write-Host "[$($img.Name)] OK Done"
+    }
+} finally {
+    Restore-AcrPublicAccess
 }
 
 # -------------------------------------------------------
@@ -227,13 +260,16 @@ function Update-FunctionApp {
         --registry-server "https://${AcrLoginServer}" `
         --output none
 
-    # Enable managed-identity based ACR pull
+    # Enable managed-identity based ACR pull via config/web REST API.
+    # NOTE: az resource update --set does NOT persist acrUserManagedIdentityID
+    # (known platform bug), so we use az rest PATCH on the config/web endpoint.
     $ResourceId = "/subscriptions/${SubscriptionId}/resourceGroups/${ResourceGroupName}/providers/Microsoft.Web/sites/${AppName}"
-    az resource update `
-        --ids $ResourceId `
-        --set "properties.siteConfig.acrUseManagedIdentityCreds=true" `
-        --set "properties.siteConfig.acrUserManagedIdentityID=$MiClientId" `
-        --output none
+    $ConfigUri = "https://management.azure.com${ResourceId}/config/web?api-version=2023-12-01"
+    $Body = @{ properties = @{ acrUseManagedIdentityCreds = $true; acrUserManagedIdentityID = $MiClientId } } | ConvertTo-Json -Depth 5
+    $BodyFile = [System.IO.Path]::GetTempFileName()
+    Set-Content -Path $BodyFile -Value $Body -Encoding utf8
+    az rest --method patch --uri $ConfigUri --body "@$BodyFile" --output none
+    Remove-Item $BodyFile -ErrorAction SilentlyContinue
 
     az functionapp restart `
         --name $AppName `

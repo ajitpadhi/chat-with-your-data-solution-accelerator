@@ -152,12 +152,18 @@ update_function_app() {
         --registry-server "https://${ACR_LOGIN_SERVER}" \
         --output none
 
+    # Enable managed-identity based ACR pull via config/web REST API.
+    # NOTE: az resource update --set does NOT persist acrUserManagedIdentityID
+    # (known platform bug), so we use az rest PATCH on the config/web endpoint.
     local resource_id="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Web/sites/${app_name}"
-    az resource update \
-        --ids "$resource_id" \
-        --set "properties.siteConfig.acrUseManagedIdentityCreds=true" \
-        --set "properties.siteConfig.acrUserManagedIdentityID=$MI_CLIENT_ID" \
-        --output none
+    local config_uri="https://management.azure.com${resource_id}/config/web?api-version=2023-12-01"
+    local body_file
+    body_file=$(mktemp)
+    cat > "$body_file" <<EOF
+{"properties":{"acrUseManagedIdentityCreds":true,"acrUserManagedIdentityID":"${MI_CLIENT_ID}"}}
+EOF
+    az rest --method patch --uri "$config_uri" --body "@${body_file}" --output none
+    rm -f "$body_file"
 
     az functionapp restart \
         --name "$app_name" \
@@ -178,6 +184,36 @@ echo ""
 echo "--- REMOTE BUILD (ACR Tasks - no local Docker required) ---"
 echo "    Note: your Azure identity needs Contributor or AcrPush access on the ACR."
 echo ""
+
+# ---------------------------------------------------------------------------
+# ACR public access helpers (WAF auto-detect, try/finally pattern from CGSA)
+# ---------------------------------------------------------------------------
+ACR_OPENED_FOR_BUILD=false
+
+enable_acr_public_access() {
+    local public_access
+    public_access=$(az acr show -n "$ACR_NAME" --query publicNetworkAccess --output tsv 2>/dev/null || true)
+    if [[ "$public_access" == "Disabled" ]]; then
+        echo "===== ACR public access is disabled (WAF mode) - temporarily enabling for build ====="
+        az acr update -n "$ACR_NAME" --public-network-enabled true --default-action Allow --output none --only-show-errors
+        ACR_OPENED_FOR_BUILD=true
+        echo "Waiting 45s for network rule propagation..."
+        sleep 45
+    fi
+}
+
+restore_acr_public_access() {
+    if [[ "$ACR_OPENED_FOR_BUILD" == "true" ]]; then
+        echo "===== Re-locking ACR (disabling public network access) ====="
+        az acr update -n "$ACR_NAME" --public-network-enabled false --default-action Deny --output none --only-show-errors || \
+            echo "WARNING: Failed to re-disable ACR public access. Re-lock manually: az acr update -n $ACR_NAME --public-network-enabled false --default-action Deny"
+    fi
+}
+
+# Ensure ACR is re-locked on exit (success or failure)
+trap restore_acr_public_access EXIT
+
+enable_acr_public_access
 
 for dockerfile in "${IMAGE_DEFINITIONS[@]}"; do
     dockerfile_path="${dockerfile%%:*}"

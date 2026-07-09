@@ -308,12 +308,11 @@ class AgentFrameworkOrchestrator(OrchestratorBase):
 
         answer = "".join(answer_parts)
         if retrieved_citations:
-            # pgvector app-side grounding path: the model cited the
-            # injected [docN] sources block, so keep only the markers it
-            # actually referenced -- symmetric with the langgraph path.
-            # There are no native KB annotations to normalize or enrich
-            # here; build_citations already carries title / snippet.
-            citations = filter_to_referenced(answer, retrieved_citations)
+            # pgvector app-side grounding path: emit all citations so
+            # positional [docN] indexing stays in sync with the array
+            # the frontend receives (the frontend resolves [docN] by
+            # array position, not by id).
+            citations = list(retrieved_citations)
         else:
             # Foundry IQ KB path: citations ride native annotations.
             citations = citations_from_annotations(citation_annotations)
