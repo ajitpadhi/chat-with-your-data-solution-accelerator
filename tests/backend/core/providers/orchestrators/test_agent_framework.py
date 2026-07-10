@@ -20,7 +20,7 @@ from backend.core.settings import (
     OpenAISettings,
     SearchSettings,
 )
-from backend.core.types import ChatMessage, SearchResult
+from backend.core.types import AadScope, ChatMessage, SearchResult
 
 _AGENT_FW_LOGGER_NAME = "backend.core.providers.orchestrators.agent_framework"
 
@@ -209,6 +209,7 @@ def _make_orchestrator(
     agents: Any = None,
     db: Any = None,
     search: Any = None,
+    credential: Any = None,
     supports_reasoning: bool = False,
 ) -> AgentFrameworkOrchestrator:
     llm = MagicMock(spec=BaseLLMProvider)
@@ -219,6 +220,7 @@ def _make_orchestrator(
         agents=agents if agents is not None else _FakeAgentsProvider(),
         db=db if db is not None else object(),
         search=search,
+        credential=credential,
     )
 
 
@@ -705,6 +707,94 @@ def test_build_kb_tool_sets_project_connection_id() -> None:
     tool = orch._build_kb_tool()
     assert tool is not None
     assert tool.as_dict()["project_connection_id"] == "my-conn"
+
+
+def _fake_credential(token: str = "kb-token") -> Any:
+    cred = MagicMock()
+    cred.get_token = AsyncMock(return_value=SimpleNamespace(token=token))
+    return cred
+
+
+def test_build_kb_tool_sets_authorization_when_token_provided() -> None:
+    orch = _make_orchestrator(settings=_settings_with_search(connection_name="my-conn"))
+    tool = orch._build_kb_tool(authorization="kb-token")
+    assert tool is not None
+    payload = tool.as_dict()
+    # A caller-supplied bearer wins over the connection: when we mint our
+    # own token we must not also point the runtime at the connection.
+    assert payload["authorization"] == "kb-token"
+    assert "project_connection_id" not in payload
+
+
+def test_build_kb_tool_returns_none_when_no_auth_path_available() -> None:
+    orch = _make_orchestrator(settings=_settings_with_search(connection_name=""))
+    # No credential-minted bearer and no connection name -> nothing to
+    # authenticate with, so no tool is built.
+    assert orch._build_kb_tool(authorization=None) is None
+
+
+@pytest.mark.asyncio
+async def test_kb_authorization_mints_search_scoped_token() -> None:
+    cred = _fake_credential("minted-token")
+    orch = _make_orchestrator(credential=cred)
+    token = await orch._kb_authorization()
+    assert token == "minted-token"
+    cred.get_token.assert_awaited_once_with(AadScope.SEARCH)
+
+
+@pytest.mark.asyncio
+async def test_kb_authorization_returns_none_without_credential() -> None:
+    orch = _make_orchestrator(credential=None)
+    assert await orch._kb_authorization() is None
+
+
+@pytest.mark.asyncio
+async def test_kb_authorization_degrades_to_none_on_azure_error() -> None:
+    cred = MagicMock()
+    cred.get_token = AsyncMock(side_effect=HttpResponseError("boom"))
+    orch = _make_orchestrator(credential=cred)
+    assert await orch._kb_authorization() is None
+
+
+@pytest.mark.asyncio
+async def test_run_attaches_authorization_when_credential_present() -> None:
+    agent = _FakeAgent(updates=[_update(_text_block("ok"))])
+    provider = _FakeAgentsProvider(agent=agent)
+    orch = _make_orchestrator(
+        settings=_settings_with_search(
+            endpoint="https://srch.example",
+            kb_name="cwyd-kb",
+            api_version="2025-11-01-preview",
+            connection_name="search-conn",
+        ),
+        agents=provider,
+        credential=_fake_credential("minted-token"),
+    )
+
+    _ = [ev async for ev in orch.run([ChatMessage(role="user", content="hi")])]
+
+    payload = provider.build_calls[0]["extra_tools"][0]
+    assert payload["type"] == "mcp"
+    assert payload["authorization"] == "minted-token"
+    # The minted bearer supersedes the connection path.
+    assert "project_connection_id" not in payload
+
+
+@pytest.mark.asyncio
+async def test_run_falls_back_to_connection_id_when_no_credential() -> None:
+    agent = _FakeAgent(updates=[_update(_text_block("ok"))])
+    provider = _FakeAgentsProvider(agent=agent)
+    orch = _make_orchestrator(
+        settings=_settings_with_search(connection_name="search-conn"),
+        agents=provider,
+        credential=None,
+    )
+
+    _ = [ev async for ev in orch.run([ChatMessage(role="user", content="hi")])]
+
+    payload = provider.build_calls[0]["extra_tools"][0]
+    assert payload["project_connection_id"] == "search-conn"
+    assert "authorization" not in payload
 
 
 # ---------------------------------------------------------------------------
