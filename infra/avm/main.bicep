@@ -1182,19 +1182,6 @@ module frontendContainerApp './modules/compute/container-app.bicep' = {
   }
 }
 
-// module appServicePlan './modules/compute/app-service-plan.bicep' = {
-//   name: take('module.app-service-plan.${solutionName}', 64)
-//   params: {
-//     solutionName: solutionSuffix
-//     location: location
-//     tags: allTags
-//     enableTelemetry: enableTelemetry
-//     skuName: (enableScalability || enableRedundancy) ? 'P1v3' : 'B3'
-//     skuCapacity: enableRedundancy ? 3 : 2
-//     zoneRedundant: enableRedundancy
-//   }
-// }
-
 module functionContainerApp './modules/compute/container-app.bicep' = {
   name: take('module.container-app-function.${solutionName}', 64)
   params: {

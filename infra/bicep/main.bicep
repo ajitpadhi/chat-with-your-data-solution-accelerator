@@ -306,6 +306,10 @@ module aiModelDeployments './modules/ai/ai-foundry-model-deployment.bicep' = [
       skuName: deployment.sku.name
       skuCapacity: deployment.sku.capacity
     }
+    dependsOn: [
+      aiProject
+      existingAIProject
+    ]
   }
 ]
 
@@ -449,9 +453,10 @@ module containerRegistry './modules/compute/container-registry.bicep' = {
     tags: tags
     sku: 'Basic'
     identity: {
-      userAssignedResourceIds: [
-        userAssignedIdentity.outputs.resourceId
-      ]
+      type: 'SystemAssigned, UserAssigned'
+      userAssignedIdentities: {
+        '${userAssignedIdentity.outputs.resourceId}': {}
+      }
     }
   }
 }
@@ -600,6 +605,7 @@ module functionContainerApp './modules/compute/container-app.bicep' = {
     name: 'ca-function-${solutionSuffix}'
     location: location
     tags: union(allTags, { 'azd-service-name': 'function' })
+    kind: 'functionapp'
     environmentResourceId: containerAppsEnv.outputs.resourceId
     identity: {
       type: 'SystemAssigned, UserAssigned'
@@ -616,7 +622,7 @@ module functionContainerApp './modules/compute/container-app.bicep' = {
     workloadProfileName: 'Consumption'
     ingressTargetPort: 80
     scaleSettings: {
-      minReplicas: 1
+      minReplicas: 0
       maxReplicas: 3
     }
     containers: [
@@ -665,47 +671,50 @@ module functionContainerApp './modules/compute/container-app.bicep' = {
 }
 
 // ========== Event Grid (storage blob events -> blob-events queue) ========== //
-module eventGridSystemTopic './modules/data/event-grid.bicep' = {
-  name: take('module.event-grid.${solutionName}', 64)
-  params: {
-    solutionName: solutionSuffix
-    location: location
-    tags: allTags
-    source: storageAccount.outputs.resourceId
-    topicType: 'Microsoft.Storage.StorageAccounts'
-    storageAccountName: storageAccount.outputs.name
-    eventSubscriptions: [
-      {
-        name: 'blob-created-to-blob-events'
-        deliveryWithResourceIdentity: {
-          identity: {
-            type: 'SystemAssigned'
-          }
-          destination: {
-            endpointType: 'StorageQueue'
-            properties: {
-              resourceId: storageAccount.outputs.resourceId
-              queueName: blobEventsQueueName
-            }
-          }
-        }
-        filter: {
-          includedEventTypes: [
-            'Microsoft.Storage.BlobCreated'
-            'Microsoft.Storage.BlobDeleted'
-          ]
-          subjectBeginsWith: '/blobServices/default/containers/${documentsContainerName}/'
-          enableAdvancedFilteringOnArrays: true
-        }
-        eventDeliverySchema: 'EventGridSchema'
-        retryPolicy: {
-          maxDeliveryAttempts: 30
-          eventTimeToLiveInMinutes: 1440
-        }
-      }
-    ]
-  }
-}
+// module eventGridSystemTopic './modules/data/event-grid.bicep' = {
+//   name: take('module.event-grid.${solutionName}', 64)
+//   params: {
+//     solutionName: solutionSuffix
+//     location: location
+//     tags: allTags
+//     source: storageAccount.outputs.resourceId
+//     topicType: 'Microsoft.Storage.StorageAccounts'
+//     storageAccountName: storageAccount.outputs.name
+//     eventSubscriptions: [
+//       {
+//         name: 'blob-created-to-blob-events'
+//         deliveryWithResourceIdentity: {
+//           identity: {
+//             type: 'SystemAssigned'
+//           }
+//           destination: {
+//             endpointType: 'StorageQueue'
+//             properties: {
+//               resourceId: storageAccount.outputs.resourceId
+//               queueName: blobEventsQueueName
+//             }
+//           }
+//         }
+//         filter: {
+//           includedEventTypes: [
+//             'Microsoft.Storage.BlobCreated'
+//             'Microsoft.Storage.BlobDeleted'
+//           ]
+//           subjectBeginsWith: '/blobServices/default/containers/${documentsContainerName}/'
+//           enableAdvancedFilteringOnArrays: true
+//         }
+//         eventDeliverySchema: 'EventGridSchema'
+//         retryPolicy: {
+//           maxDeliveryAttempts: 30
+//           eventTimeToLiveInMinutes: 1440
+//         }
+//       }
+//     ]
+//   }
+//   dependsOn: [
+//     storageAccount
+//   ]
+// }
 
 // ============================================================================
 // Role Assignments (centralized in modules/identity/role-assignments.bicep).
@@ -739,6 +748,7 @@ module roleAssignments './modules/identity/role-assignments.bicep' = {
     searchPrincipalId: isCosmos ? aiSearch!.outputs.identityPrincipalId : ''
     deployingUserPrincipalId: deployingUserPrincipalId
     deployingUserPrincipalType: deployingUserPrincipalType
+    containerRegistryName: containerRegistry.outputs.name
   }
 }
 // ===================== //

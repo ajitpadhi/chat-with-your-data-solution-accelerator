@@ -13,6 +13,14 @@ param location string
 @description('Resource tags.')
 param tags object = {}
 
+@allowed([
+  'containerapps'
+  'workflowapp'
+  'functionapp'
+])
+@description('Optional. Metadata used to render different experiences for resources of the same type.')
+param kind string = 'containerapps'
+
 @description('Resource ID of the Container Apps Environment.')
 param environmentResourceId string
 
@@ -75,6 +83,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-10-02-preview' = {
   name: name
   location: location
   tags: tags
+  kind: kind
   identity: identity
   properties: {
     managedEnvironmentId: environmentResourceId

@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "4665533661643024277"
+      "templateHash": "7153960449077868897"
     }
   },
   "parameters": {
@@ -292,9 +292,7 @@
     "aiSearchName": "[format('srch-{0}', variables('solutionSuffix'))]",
     "storageName": "[take(format('st{0}', variables('solutionSuffix')), 24)]",
     "cosmosDbName": "[format('cosmos-{0}', variables('solutionSuffix'))]",
-    "useExistingLogAnalytics": "[not(empty(parameters('existingLogAnalyticsWorkspaceId')))]",
-    "functionName": "[format('func-{0}', variables('solutionSuffix'))]",
-    "functionAppName": "[format('{0}-docker', variables('functionName'))]"
+    "useExistingLogAnalytics": "[not(empty(parameters('existingLogAnalyticsWorkspaceId')))]"
   },
   "resources": {
     "resourceGroupTags": {
@@ -1202,7 +1200,11 @@
             }
           }
         }
-      }
+      },
+      "dependsOn": [
+        "aiProject",
+        "existingAIProject"
+      ]
     },
     "speechService": {
       "type": "Microsoft.Resources/deployments",
@@ -2924,9 +2926,10 @@
           },
           "identity": {
             "value": {
-              "userAssignedResourceIds": [
-                "[reference('userAssignedIdentity').outputs.resourceId.value]"
-              ]
+              "type": "SystemAssigned, UserAssigned",
+              "userAssignedIdentities": {
+                "[format('{0}', reference('userAssignedIdentity').outputs.resourceId.value)]": {}
+              }
             }
           }
         },
@@ -3305,7 +3308,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "17370346544281807053"
+              "templateHash": "6121563618546530647"
             }
           },
           "parameters": {
@@ -3326,6 +3329,18 @@
               "defaultValue": {},
               "metadata": {
                 "description": "Resource tags."
+              }
+            },
+            "kind": {
+              "type": "string",
+              "defaultValue": "containerapps",
+              "allowedValues": [
+                "containerapps",
+                "workflowapp",
+                "functionapp"
+              ],
+              "metadata": {
+                "description": "Optional. Metadata used to render different experiences for resources of the same type."
               }
             },
             "environmentResourceId": {
@@ -3450,6 +3465,7 @@
               "name": "[parameters('name')]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
+              "kind": "[parameters('kind')]",
               "identity": "[parameters('identity')]",
               "properties": {
                 "managedEnvironmentId": "[parameters('environmentResourceId')]",
@@ -3591,7 +3607,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "17370346544281807053"
+              "templateHash": "6121563618546530647"
             }
           },
           "parameters": {
@@ -3612,6 +3628,18 @@
               "defaultValue": {},
               "metadata": {
                 "description": "Resource tags."
+              }
+            },
+            "kind": {
+              "type": "string",
+              "defaultValue": "containerapps",
+              "allowedValues": [
+                "containerapps",
+                "workflowapp",
+                "functionapp"
+              ],
+              "metadata": {
+                "description": "Optional. Metadata used to render different experiences for resources of the same type."
               }
             },
             "environmentResourceId": {
@@ -3736,6 +3764,7 @@
               "name": "[parameters('name')]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
+              "kind": "[parameters('kind')]",
               "identity": "[parameters('identity')]",
               "properties": {
                 "managedEnvironmentId": "[parameters('environmentResourceId')]",
@@ -3797,173 +3826,10 @@
         "userAssignedIdentity"
       ]
     },
-    "appServicePlan": {
+    "functionContainerApp": {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[take(format('module.app-service-plan.{0}', parameters('solutionName')), 64)]",
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "parameters": {
-          "solutionName": {
-            "value": "[variables('solutionSuffix')]"
-          },
-          "location": {
-            "value": "[parameters('location')]"
-          },
-          "tags": {
-            "value": "[variables('allTags')]"
-          },
-          "skuName": {
-            "value": "B3"
-          }
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "1.0.0.0",
-          "metadata": {
-            "_generator": {
-              "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "8496143357348681814"
-            }
-          },
-          "parameters": {
-            "solutionName": {
-              "type": "string",
-              "metadata": {
-                "description": "Solution name suffix used to derive the resource name."
-              }
-            },
-            "name": {
-              "type": "string",
-              "defaultValue": "[format('asp-{0}', parameters('solutionName'))]",
-              "metadata": {
-                "description": "Name of the App Service Plan."
-              }
-            },
-            "location": {
-              "type": "string",
-              "metadata": {
-                "description": "Azure region for the resource."
-              }
-            },
-            "tags": {
-              "type": "object",
-              "defaultValue": {},
-              "metadata": {
-                "description": "Tags to apply to the resource."
-              }
-            },
-            "skuName": {
-              "type": "string",
-              "defaultValue": "B2",
-              "allowedValues": [
-                "F1",
-                "D1",
-                "B1",
-                "B2",
-                "B3",
-                "S1",
-                "S2",
-                "S3",
-                "P1",
-                "P2",
-                "P3",
-                "P4",
-                "P0v3",
-                "P0v4",
-                "P1v3",
-                "P1v4",
-                "P2v3",
-                "P3v3"
-              ],
-              "metadata": {
-                "description": "SKU name for the App Service Plan."
-              }
-            },
-            "reserved": {
-              "type": "bool",
-              "defaultValue": true,
-              "metadata": {
-                "description": "Whether the plan is Linux-based."
-              }
-            },
-            "kind": {
-              "type": "string",
-              "defaultValue": "linux",
-              "metadata": {
-                "description": "Kind of the App Service Plan."
-              }
-            },
-            "skuCapacity": {
-              "type": "int",
-              "defaultValue": 1,
-              "metadata": {
-                "description": "Number of instances (workers)."
-              }
-            },
-            "zoneRedundant": {
-              "type": "bool",
-              "defaultValue": false,
-              "metadata": {
-                "description": "Enable zone redundancy. Requires Premium SKU (P1v3+)."
-              }
-            },
-            "identity": {
-              "type": "object",
-              "defaultValue": {
-                "type": "SystemAssigned"
-              },
-              "metadata": {
-                "description": "Optional. Managed identity configuration for the resource."
-              }
-            }
-          },
-          "resources": [
-            {
-              "type": "Microsoft.Web/serverfarms",
-              "apiVersion": "2025-05-01",
-              "name": "[parameters('name')]",
-              "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]",
-              "kind": "[parameters('kind')]",
-              "sku": {
-                "name": "[parameters('skuName')]",
-                "capacity": "[parameters('skuCapacity')]"
-              },
-              "properties": {
-                "reserved": "[parameters('reserved')]",
-                "zoneRedundant": "[parameters('zoneRedundant')]"
-              },
-              "identity": "[parameters('identity')]"
-            }
-          ],
-          "outputs": {
-            "resourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Resource ID of the App Service Plan."
-              },
-              "value": "[resourceId('Microsoft.Web/serverfarms', parameters('name'))]"
-            },
-            "name": {
-              "type": "string",
-              "metadata": {
-                "description": "Name of the App Service Plan."
-              },
-              "value": "[parameters('name')]"
-            }
-          }
-        }
-      }
-    },
-    "functionApp": {
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
-      "name": "[take(format('module.function-app.{0}', parameters('solutionName')), 64)]",
+      "name": "[take(format('module.container-app-function.{0}', parameters('solutionName')), 64)]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -3971,7 +3837,7 @@
         "mode": "Incremental",
         "parameters": {
           "name": {
-            "value": "[variables('functionAppName')]"
+            "value": "[format('ca-function-{0}', variables('solutionSuffix'))]"
           },
           "location": {
             "value": "[parameters('location')]"
@@ -3980,19 +3846,10 @@
             "value": "[union(variables('allTags'), createObject('azd-service-name', 'function'))]"
           },
           "kind": {
-            "value": "functionapp,linux,container"
+            "value": "functionapp"
           },
-          "dockerFullImageName": {
-            "value": "[variables('sampleContainerImage')]"
-          },
-          "serverFarmResourceId": {
-            "value": "[reference('appServicePlan').outputs.resourceId.value]"
-          },
-          "storageAccountName": {
-            "value": "[reference('storageAccount').outputs.name.value]"
-          },
-          "userAssignedIdentityClientId": {
-            "value": "[reference('userAssignedIdentity').outputs.clientId.value]"
+          "environmentResourceId": {
+            "value": "[reference('containerAppsEnv').outputs.resourceId.value]"
           },
           "identity": {
             "value": {
@@ -4002,31 +3859,56 @@
               }
             }
           },
-          "runtimeStack": {
-            "value": "python"
+          "registries": {
+            "value": [
+              {
+                "server": "[reference('containerRegistry').outputs.loginServer.value]",
+                "identity": "[reference('userAssignedIdentity').outputs.resourceId.value]"
+              }
+            ]
           },
-          "runtimeVersion": {
-            "value": "3.11"
+          "workloadProfileName": {
+            "value": "Consumption"
           },
-          "appSettings": {
-            "value": "[concat(createArray(createObject('name', 'AZURE_CLIENT_ID', 'value', reference('userAssignedIdentity').outputs.clientId.value), createObject('name', 'AZURE_UAMI_CLIENT_ID', 'value', reference('userAssignedIdentity').outputs.clientId.value), createObject('name', 'AZURE_TENANT_ID', 'value', subscription().tenantId), createObject('name', 'AZURE_ENVIRONMENT', 'value', 'production'), createObject('name', 'AZURE_AI_PROJECT_ENDPOINT', 'value', if(variables('useExistingAIProject'), reference('existingAIProject').outputs.projectEndpoint.value, reference('aiProject').outputs.projectEndpoint.value)), createObject('name', 'AZURE_OPENAI_ENDPOINT', 'value', if(variables('useExistingAIProject'), reference('existingAIProject').outputs.endpoint.value, reference('aiProject').outputs.endpoint.value)), createObject('name', 'AZURE_AI_SERVICES_ENDPOINT', 'value', if(variables('useExistingAIProject'), reference('existingAIProject').outputs.endpoint.value, reference('aiProject').outputs.endpoint.value)), createObject('name', 'AZURE_OPENAI_API_VERSION', 'value', parameters('azureOpenAiApiVersion')), createObject('name', 'AZURE_OPENAI_EMBEDDING_DEPLOYMENT', 'value', parameters('embeddingModelName')), createObject('name', 'AZURE_DB_TYPE', 'value', parameters('databaseType')), createObject('name', 'AZURE_INDEX_STORE', 'value', variables('indexStoreValue')), createObject('name', 'AZURE_COSMOS_ENDPOINT', 'value', if(variables('isCosmos'), reference('cosmosDb').outputs.endpoint.value, '')), createObject('name', 'AZURE_AI_SEARCH_ENDPOINT', 'value', if(variables('isCosmos'), reference('aiSearch').outputs.endpoint.value, '')), createObject('name', 'AZURE_POSTGRES_ENDPOINT', 'value', if(equals(parameters('databaseType'), 'postgresql'), format('postgresql://{0}:5432/cwyd?sslmode=require', reference('postgresServer').outputs.serverFqdn.value), '')), createObject('name', 'AZURE_POSTGRES_ADMIN_PRINCIPAL_NAME', 'value', if(equals(parameters('databaseType'), 'postgresql'), reference('userAssignedIdentity').outputs.name.value, '')), createObject('name', 'AZURE_STORAGE_ACCOUNT_NAME', 'value', reference('storageAccount').outputs.name.value), createObject('name', 'AZURE_DOCUMENTS_CONTAINER', 'value', variables('documentsContainerName')), createObject('name', 'AZURE_DOC_PROCESSING_QUEUE', 'value', variables('docProcessingQueueName')), createObject('name', 'AZURE_INGESTION_TRIGGER', 'value', parameters('ingestionTrigger'))), if(parameters('enableMonitoring'), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', if(parameters('enableMonitoring'), reference('applicationInsights').outputs.connectionString.value, ''))), createArray()))]"
+          "ingressTargetPort": {
+            "value": 80
+          },
+          "scaleSettings": {
+            "value": {
+              "minReplicas": 0,
+              "maxReplicas": 3
+            }
+          },
+          "containers": {
+            "value": [
+              {
+                "name": "function",
+                "image": "[variables('sampleContainerImage')]",
+                "resources": {
+                  "cpu": "[json('0.5')]",
+                  "memory": "1.0Gi"
+                },
+                "env": "[concat(createArray(createObject('name', 'AzureWebJobsStorage__accountName', 'value', reference('storageAccount').outputs.name.value), createObject('name', 'AzureWebJobsStorage__credential', 'value', 'managedidentity'), createObject('name', 'AzureWebJobsStorage__clientId', 'value', reference('userAssignedIdentity').outputs.clientId.value), createObject('name', 'WEBSITES_ENABLE_APP_SERVICE_STORAGE', 'value', 'false'), createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', 'python'), createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'AZURE_CLIENT_ID', 'value', reference('userAssignedIdentity').outputs.clientId.value), createObject('name', 'AZURE_UAMI_CLIENT_ID', 'value', reference('userAssignedIdentity').outputs.clientId.value), createObject('name', 'AZURE_TENANT_ID', 'value', subscription().tenantId), createObject('name', 'AZURE_ENVIRONMENT', 'value', 'production'), createObject('name', 'AZURE_AI_PROJECT_ENDPOINT', 'value', if(variables('useExistingAIProject'), reference('existingAIProject').outputs.projectEndpoint.value, reference('aiProject').outputs.projectEndpoint.value)), createObject('name', 'AZURE_OPENAI_ENDPOINT', 'value', if(variables('useExistingAIProject'), reference('existingAIProject').outputs.endpoint.value, reference('aiProject').outputs.endpoint.value)), createObject('name', 'AZURE_AI_SERVICES_ENDPOINT', 'value', if(variables('useExistingAIProject'), reference('existingAIProject').outputs.endpoint.value, reference('aiProject').outputs.endpoint.value)), createObject('name', 'AZURE_OPENAI_API_VERSION', 'value', parameters('azureOpenAiApiVersion')), createObject('name', 'AZURE_OPENAI_EMBEDDING_DEPLOYMENT', 'value', parameters('embeddingModelName')), createObject('name', 'AZURE_DB_TYPE', 'value', parameters('databaseType')), createObject('name', 'AZURE_INDEX_STORE', 'value', variables('indexStoreValue')), createObject('name', 'AZURE_COSMOS_ENDPOINT', 'value', if(variables('isCosmos'), reference('cosmosDb').outputs.endpoint.value, '')), createObject('name', 'AZURE_AI_SEARCH_ENDPOINT', 'value', if(variables('isCosmos'), reference('aiSearch').outputs.endpoint.value, '')), createObject('name', 'AZURE_POSTGRES_ENDPOINT', 'value', if(equals(parameters('databaseType'), 'postgresql'), format('postgresql://{0}:5432/cwyd?sslmode=require', reference('postgresServer').outputs.serverFqdn.value), '')), createObject('name', 'AZURE_POSTGRES_ADMIN_PRINCIPAL_NAME', 'value', if(equals(parameters('databaseType'), 'postgresql'), reference('userAssignedIdentity').outputs.name.value, '')), createObject('name', 'AZURE_STORAGE_ACCOUNT_NAME', 'value', reference('storageAccount').outputs.name.value), createObject('name', 'AZURE_DOCUMENTS_CONTAINER', 'value', variables('documentsContainerName')), createObject('name', 'AZURE_DOC_PROCESSING_QUEUE', 'value', variables('docProcessingQueueName')), createObject('name', 'AZURE_INGESTION_TRIGGER', 'value', parameters('ingestionTrigger'))), if(parameters('enableMonitoring'), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', if(parameters('enableMonitoring'), reference('applicationInsights').outputs.connectionString.value, ''))), createArray()))]"
+              }
+            ]
           }
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
           "contentVersion": "1.0.0.0",
           "metadata": {
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "3021355990104297258"
+              "templateHash": "6121563618546530647"
             }
           },
           "parameters": {
             "name": {
               "type": "string",
               "metadata": {
-                "description": "Name of the function app."
+                "description": "Name of the container app."
               }
             },
             "location": {
@@ -4042,23 +3924,83 @@
                 "description": "Resource tags."
               }
             },
-            "serverFarmResourceId": {
+            "kind": {
               "type": "string",
+              "defaultValue": "containerapps",
+              "allowedValues": [
+                "containerapps",
+                "workflowapp",
+                "functionapp"
+              ],
               "metadata": {
-                "description": "Resource ID of the App Service Plan."
+                "description": "Optional. Metadata used to render different experiences for resources of the same type."
               }
             },
-            "storageAccountName": {
+            "environmentResourceId": {
               "type": "string",
               "metadata": {
-                "description": "Name of the storage account."
+                "description": "Resource ID of the Container Apps Environment."
               }
             },
-            "userAssignedIdentityClientId": {
-              "type": "string",
-              "defaultValue": "",
+            "containers": {
+              "type": "array",
               "metadata": {
-                "description": "Client ID of the user-assigned managed identity used for identity-based AzureWebJobsStorage access."
+                "description": "Container definitions."
+              }
+            },
+            "ingressExternal": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Enable external ingress."
+              }
+            },
+            "ingressTargetPort": {
+              "type": "int",
+              "defaultValue": 80,
+              "metadata": {
+                "description": "Target port for ingress."
+              }
+            },
+            "ingressTransport": {
+              "type": "string",
+              "defaultValue": "auto",
+              "allowedValues": [
+                "auto",
+                "http",
+                "http2",
+                "tcp"
+              ],
+              "metadata": {
+                "description": "Ingress transport protocol."
+              }
+            },
+            "ingressAllowInsecure": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Whether to allow insecure ingress connections."
+              }
+            },
+            "disableIngress": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Disable ingress entirely (for background workers)."
+              }
+            },
+            "registries": {
+              "type": "array",
+              "nullable": true,
+              "metadata": {
+                "description": "Container registry configurations."
+              }
+            },
+            "secrets": {
+              "type": "array",
+              "nullable": true,
+              "metadata": {
+                "description": "Secret definitions."
               }
             },
             "identity": {
@@ -4070,106 +4012,102 @@
                 "description": "Optional. Managed identity configuration for the resource."
               }
             },
-            "appSettings": {
-              "type": "array",
-              "defaultValue": [],
-              "metadata": {
-                "description": "App settings as name-value pairs."
-              }
-            },
-            "siteConfig": {
+            "corsPolicy": {
               "type": "object",
               "defaultValue": {},
               "metadata": {
-                "description": "Site configuration object."
+                "description": "CORS policy configuration."
               }
             },
-            "runtimeStack": {
+            "activeRevisionsMode": {
               "type": "string",
-              "defaultValue": "python",
+              "defaultValue": "Single",
+              "allowedValues": [
+                "Single",
+                "Multiple"
+              ],
               "metadata": {
-                "description": "Runtime stack."
+                "description": "Active revision mode."
               }
             },
-            "runtimeVersion": {
-              "type": "string",
-              "defaultValue": "3.11",
+            "scaleSettings": {
+              "type": "object",
+              "defaultValue": {
+                "maxReplicas": 10,
+                "minReplicas": 0
+              },
               "metadata": {
-                "description": "Runtime version."
+                "description": "Scale settings (maxReplicas, minReplicas, rules)."
               }
             },
-            "kind": {
+            "workloadProfileName": {
               "type": "string",
-              "defaultValue": "functionapp,linux",
+              "nullable": true,
               "metadata": {
-                "description": "Resource kind for the site. Use functionapp,linux for code/zip or functionapp,linux,container for a container image."
-              }
-            },
-            "dockerFullImageName": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Optional. Full docker image reference (registry/repo:tag) for container-hosted function apps. When set, the app runs from this image instead of a code/zip package."
+                "description": "Workload profile name."
               }
             }
           },
           "variables": {
-            "useDocker": "[not(empty(parameters('dockerFullImageName')))]",
-            "linuxFxVersion": "[if(variables('useDocker'), format('DOCKER|{0}', parameters('dockerFullImageName')), format('{0}|{1}', toUpper(parameters('runtimeStack')), parameters('runtimeVersion')))]",
-            "baseSettings": "[concat(createArray(createObject('name', 'AzureWebJobsStorage__accountName', 'value', parameters('storageAccountName')), createObject('name', 'AzureWebJobsStorage__credential', 'value', 'managedidentity'), createObject('name', 'AzureWebJobsStorage__clientId', 'value', parameters('userAssignedIdentityClientId')), createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'SCM_DO_BUILD_DURING_DEPLOYMENT', 'value', string(if(variables('useDocker'), false(), true()))), createObject('name', 'ENABLE_ORYX_BUILD', 'value', string(if(variables('useDocker'), false(), contains(parameters('kind'), 'linux')))), createObject('name', 'WEBSITES_ENABLE_APP_SERVICE_STORAGE', 'value', 'false')), if(variables('useDocker'), createArray(), createArray(createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', toLower(parameters('runtimeStack'))), createObject('name', 'WEBSITE_RUN_FROM_PACKAGE', 'value', '1'))))]",
-            "mergedSettings": "[concat(variables('baseSettings'), parameters('appSettings'))]",
-            "defaultSiteConfig": {
-              "linuxFxVersion": "[variables('linuxFxVersion')]",
-              "ftpsState": "Disabled",
-              "minTlsVersion": "1.2",
-              "appSettings": "[variables('mergedSettings')]"
-            },
-            "effectiveSiteConfig": "[union(variables('defaultSiteConfig'), parameters('siteConfig'))]"
+            "ingressConfig": "[if(parameters('disableIngress'), null(), createObject('external', parameters('ingressExternal'), 'targetPort', parameters('ingressTargetPort'), 'transport', parameters('ingressTransport'), 'allowInsecure', parameters('ingressAllowInsecure'), 'corsPolicy', if(not(empty(parameters('corsPolicy'))), parameters('corsPolicy'), null())))]"
           },
-          "resources": [
-            {
-              "type": "Microsoft.Web/sites",
-              "apiVersion": "2024-04-01",
+          "resources": {
+            "containerApp": {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-10-02-preview",
               "name": "[parameters('name')]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
               "kind": "[parameters('kind')]",
               "identity": "[parameters('identity')]",
               "properties": {
-                "serverFarmId": "[parameters('serverFarmResourceId')]",
-                "siteConfig": "[variables('effectiveSiteConfig')]",
-                "httpsOnly": true
+                "managedEnvironmentId": "[parameters('environmentResourceId')]",
+                "workloadProfileName": "[parameters('workloadProfileName')]",
+                "configuration": {
+                  "activeRevisionsMode": "[parameters('activeRevisionsMode')]",
+                  "ingress": "[variables('ingressConfig')]",
+                  "registries": "[parameters('registries')]",
+                  "secrets": "[parameters('secrets')]"
+                },
+                "template": {
+                  "containers": "[parameters('containers')]",
+                  "scale": {
+                    "minReplicas": "[parameters('scaleSettings').minReplicas]",
+                    "maxReplicas": "[parameters('scaleSettings').maxReplicas]",
+                    "rules": "[if(contains(parameters('scaleSettings'), 'rules'), parameters('scaleSettings').rules, null())]"
+                  }
+                }
               }
             }
-          ],
+          },
           "outputs": {
             "name": {
               "type": "string",
               "metadata": {
-                "description": "The name of the function app."
+                "description": "The name of the container app."
               },
               "value": "[parameters('name')]"
             },
             "resourceId": {
               "type": "string",
               "metadata": {
-                "description": "The resource ID of the function app."
+                "description": "The resource ID of the container app."
               },
-              "value": "[resourceId('Microsoft.Web/sites', parameters('name'))]"
+              "value": "[resourceId('Microsoft.App/containerApps', parameters('name'))]"
             },
-            "defaultHostName": {
+            "fqdn": {
               "type": "string",
               "metadata": {
-                "description": "The default hostname of the function app."
+                "description": "The FQDN of the container app."
               },
-              "value": "[reference(resourceId('Microsoft.Web/sites', parameters('name')), '2024-04-01').defaultHostName]"
+              "value": "[if(not(parameters('disableIngress')), reference('containerApp').configuration.ingress.fqdn, '')]"
             },
             "principalId": {
               "type": "string",
               "metadata": {
-                "description": "The principal ID of the system-assigned managed identity."
+                "description": "System-assigned identity principal ID."
               },
-              "value": "[if(contains(reference(resourceId('Microsoft.Web/sites', parameters('name')), '2024-04-01', 'full').identity, 'principalId'), reference(resourceId('Microsoft.Web/sites', parameters('name')), '2024-04-01', 'full').identity.principalId, '')]"
+              "value": "[if(contains(reference('containerApp', '2024-10-02-preview', 'full').identity.type, 'SystemAssigned'), reference('containerApp', '2024-10-02-preview', 'full').identity.principalId, '')]"
             }
           }
         }
@@ -4178,218 +4116,13 @@
         "aiProject",
         "aiSearch",
         "applicationInsights",
-        "appServicePlan",
+        "containerAppsEnv",
+        "containerRegistry",
         "cosmosDb",
         "existingAIProject",
         "postgresServer",
         "storageAccount",
         "userAssignedIdentity"
-      ]
-    },
-    "eventGridSystemTopic": {
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
-      "name": "[take(format('module.event-grid.{0}', parameters('solutionName')), 64)]",
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "parameters": {
-          "solutionName": {
-            "value": "[variables('solutionSuffix')]"
-          },
-          "location": {
-            "value": "[parameters('location')]"
-          },
-          "tags": {
-            "value": "[variables('allTags')]"
-          },
-          "source": {
-            "value": "[reference('storageAccount').outputs.resourceId.value]"
-          },
-          "topicType": {
-            "value": "Microsoft.Storage.StorageAccounts"
-          },
-          "storageAccountName": {
-            "value": "[reference('storageAccount').outputs.name.value]"
-          },
-          "eventSubscriptions": {
-            "value": [
-              {
-                "name": "blob-created-to-blob-events",
-                "deliveryWithResourceIdentity": {
-                  "identity": {
-                    "type": "SystemAssigned"
-                  },
-                  "destination": {
-                    "endpointType": "StorageQueue",
-                    "properties": {
-                      "resourceId": "[reference('storageAccount').outputs.resourceId.value]",
-                      "queueName": "[variables('blobEventsQueueName')]"
-                    }
-                  }
-                },
-                "filter": {
-                  "includedEventTypes": [
-                    "Microsoft.Storage.BlobCreated",
-                    "Microsoft.Storage.BlobDeleted"
-                  ],
-                  "subjectBeginsWith": "[format('/blobServices/default/containers/{0}/', variables('documentsContainerName'))]",
-                  "enableAdvancedFilteringOnArrays": true
-                },
-                "eventDeliverySchema": "EventGridSchema",
-                "retryPolicy": {
-                  "maxDeliveryAttempts": 30,
-                  "eventTimeToLiveInMinutes": 1440
-                }
-              }
-            ]
-          }
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "1.0.0.0",
-          "metadata": {
-            "_generator": {
-              "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "15676310630249646620"
-            }
-          },
-          "parameters": {
-            "solutionName": {
-              "type": "string",
-              "metadata": {
-                "description": "Solution name suffix used to derive the resource name."
-              }
-            },
-            "name": {
-              "type": "string",
-              "defaultValue": "[format('evgt-{0}', parameters('solutionName'))]",
-              "metadata": {
-                "description": "Name of the Event Grid System Topic."
-              }
-            },
-            "location": {
-              "type": "string",
-              "metadata": {
-                "description": "Azure region for the resource."
-              }
-            },
-            "tags": {
-              "type": "object",
-              "defaultValue": {},
-              "metadata": {
-                "description": "Tags to apply to the resource."
-              }
-            },
-            "source": {
-              "type": "string",
-              "metadata": {
-                "description": "Resource ID of the source that publishes events (e.g., Storage Account resource ID)."
-              }
-            },
-            "topicType": {
-              "type": "string",
-              "metadata": {
-                "description": "The type of the event source. E.g., Microsoft.Storage.StorageAccounts."
-              }
-            },
-            "eventSubscriptions": {
-              "type": "array",
-              "defaultValue": [],
-              "metadata": {
-                "description": "Event subscriptions to create on the system topic."
-              }
-            },
-            "identity": {
-              "type": "object",
-              "defaultValue": {
-                "type": "SystemAssigned"
-              },
-              "metadata": {
-                "description": "Optional. Managed identity configuration for the resource."
-              }
-            },
-            "storageAccountName": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Name of the storage account used to scope the Storage Queue Data Message Sender role assignment. Required when eventSubscriptions use identity-based (deliveryWithResourceIdentity) delivery."
-              }
-            }
-          },
-          "resources": [
-            {
-              "type": "Microsoft.EventGrid/systemTopics",
-              "apiVersion": "2025-07-15-preview",
-              "name": "[parameters('name')]",
-              "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]",
-              "identity": "[parameters('identity')]",
-              "properties": {
-                "source": "[parameters('source')]",
-                "topicType": "[parameters('topicType')]"
-              }
-            },
-            {
-              "condition": "[and(not(empty(parameters('storageAccountName'))), not(empty(parameters('eventSubscriptions'))))]",
-              "type": "Microsoft.Authorization/roleAssignments",
-              "apiVersion": "2022-04-01",
-              "scope": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
-              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), resourceId('Microsoft.EventGrid/systemTopics', parameters('name')), 'c6a89b2d-59bc-44d0-9896-0f6e12d7b80a')]",
-              "properties": {
-                "principalId": "[reference(resourceId('Microsoft.EventGrid/systemTopics', parameters('name')), '2025-07-15-preview', 'full').identity.principalId]",
-                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'c6a89b2d-59bc-44d0-9896-0f6e12d7b80a')]",
-                "principalType": "ServicePrincipal"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.EventGrid/systemTopics', parameters('name'))]"
-              ]
-            },
-            {
-              "copy": {
-                "name": "systemTopicSubscriptions",
-                "count": "[length(parameters('eventSubscriptions'))]"
-              },
-              "type": "Microsoft.EventGrid/systemTopics/eventSubscriptions",
-              "apiVersion": "2025-07-15-preview",
-              "name": "[format('{0}/{1}', parameters('name'), parameters('eventSubscriptions')[copyIndex()].name)]",
-              "properties": "[union(createObject('filter', coalesce(tryGet(parameters('eventSubscriptions')[copyIndex()], 'filter'), createObject()), 'eventDeliverySchema', coalesce(tryGet(parameters('eventSubscriptions')[copyIndex()], 'eventDeliverySchema'), 'EventGridSchema'), 'retryPolicy', coalesce(tryGet(parameters('eventSubscriptions')[copyIndex()], 'retryPolicy'), createObject('maxDeliveryAttempts', 30, 'eventTimeToLiveInMinutes', 1440))), if(not(equals(tryGet(parameters('eventSubscriptions')[copyIndex()], 'deliveryWithResourceIdentity'), null())), createObject('deliveryWithResourceIdentity', parameters('eventSubscriptions')[copyIndex()].deliveryWithResourceIdentity), createObject('destination', parameters('eventSubscriptions')[copyIndex()].destination)))]",
-              "dependsOn": [
-                "[extensionResourceId(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), resourceId('Microsoft.EventGrid/systemTopics', parameters('name')), 'c6a89b2d-59bc-44d0-9896-0f6e12d7b80a'))]",
-                "[resourceId('Microsoft.EventGrid/systemTopics', parameters('name'))]"
-              ]
-            }
-          ],
-          "outputs": {
-            "name": {
-              "type": "string",
-              "metadata": {
-                "description": "Name of the Event Grid System Topic."
-              },
-              "value": "[parameters('name')]"
-            },
-            "resourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Resource ID of the Event Grid System Topic."
-              },
-              "value": "[resourceId('Microsoft.EventGrid/systemTopics', parameters('name'))]"
-            },
-            "systemAssignedMIPrincipalId": {
-              "type": "string",
-              "metadata": {
-                "description": "System-assigned principal ID (if enabled)."
-              },
-              "value": "[if(and(contains(parameters('identity'), 'type'), contains(parameters('identity').type, 'SystemAssigned')), reference(resourceId('Microsoft.EventGrid/systemTopics', parameters('name')), '2025-07-15-preview', 'full').identity.principalId, '')]"
-            }
-          }
-        }
-      },
-      "dependsOn": [
-        "storageAccount"
       ]
     },
     "roleAssignments": {
@@ -4438,7 +4171,7 @@
           "foundryAccountPrincipalId": "[if(variables('useExistingAIProject'), createObject('value', reference('existingAIProject').outputs.principalId.value), createObject('value', reference('aiProject').outputs.principalId.value))]",
           "foundryProjectPrincipalId": "[if(variables('useExistingAIProject'), createObject('value', reference('existingAIProject').outputs.projectIdentityPrincipalId.value), createObject('value', reference('aiProject').outputs.projectIdentityPrincipalId.value))]",
           "functionPrincipalId": {
-            "value": "[reference('functionApp').outputs.principalId.value]"
+            "value": "[reference('functionContainerApp').outputs.principalId.value]"
           },
           "searchPrincipalId": "[if(variables('isCosmos'), createObject('value', reference('aiSearch').outputs.identityPrincipalId.value), createObject('value', ''))]",
           "deployingUserPrincipalId": {
@@ -4446,6 +4179,9 @@
           },
           "deployingUserPrincipalType": {
             "value": "[parameters('deployingUserPrincipalType')]"
+          },
+          "containerRegistryName": {
+            "value": "[reference('containerRegistry').outputs.name.value]"
           }
         },
         "template": {
@@ -4828,9 +4564,10 @@
       "dependsOn": [
         "aiProject",
         "aiSearch",
+        "containerRegistry",
         "contentSafety",
         "existingAIProject",
-        "functionApp",
+        "functionContainerApp",
         "speechService",
         "userAssignedIdentity"
       ]
@@ -5113,16 +4850,16 @@
     "AZURE_FUNCTION_APP_URL": {
       "type": "string",
       "metadata": {
-        "description": "Function App URL."
+        "description": "Function Container App URL."
       },
-      "value": "[format('https://{0}', reference('functionApp').outputs.defaultHostName.value)]"
+      "value": "[format('https://{0}', reference('functionContainerApp').outputs.fqdn.value)]"
     },
     "AZURE_FUNCTION_APP_NAME": {
       "type": "string",
       "metadata": {
-        "description": "Function App name."
+        "description": "Function Container App name."
       },
-      "value": "[reference('functionApp').outputs.name.value]"
+      "value": "[reference('functionContainerApp').outputs.name.value]"
     },
     "AZURE_CONTAINER_REGISTRY_ENDPOINT": {
       "type": "string",
