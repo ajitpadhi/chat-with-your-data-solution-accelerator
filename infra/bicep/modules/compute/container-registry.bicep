@@ -36,6 +36,11 @@ param retentionPolicyStatus string = 'disabled'
 @description('Optional. Managed identity configuration for the resource.')
 param identity object = { type: 'SystemAssigned' }
 
+@description('Principal IDs to grant the AcrPull role on this registry.')
+param acrPullPrincipalIds array = []
+
+var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
+
 // ============================================================================
 // Resource Deployment
 // ============================================================================
@@ -68,6 +73,23 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2025-04-01' =
     zoneRedundancy: 'Disabled'
   }
 }
+
+// AcrPull granted here (at registry-creation time) rather than in the centralized
+// role-assignments module so the shared managed identity can pull before any
+// container app revision is provisioned. Container Apps constructs registry
+// credentials for every configured registry before starting a revision, so this
+// grant must exist independently of the container apps that consume it.
+resource acrPullRoles 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
+  for principalId in acrPullPrincipalIds: {
+    name: guid(containerRegistry.id, principalId, acrPullRoleId)
+    scope: containerRegistry
+    properties: {
+      principalId: principalId
+      roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleId)
+      principalType: 'ServicePrincipal'
+    }
+  }
+]
 
 // ============================================================================
 // Outputs

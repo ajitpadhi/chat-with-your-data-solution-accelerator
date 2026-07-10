@@ -24,9 +24,6 @@ param speechServiceName string
 @description('Name of the Content Safety service account.')
 param contentSafetyServiceName string
 
-@description('Name of the Container Registry.')
-param containerRegistryName string = ''
-
 @description('Name of the Storage Account.')
 param storageName string
 
@@ -89,7 +86,6 @@ var roleIds = {
   storageBlobDataOwner: 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'
   storageQueueDataContributor: '974c5e8b-45b9-4653-ba55-5f855dd0fb88'
   storageAccountContributor: '17d1049b-9a84-46fb-8f53-869881c3d3ab'
-  acrPullRoleId: '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 }
 var cosmosDataContributorRoleId = '00000000-0000-0000-0000-000000000002'
 
@@ -126,10 +122,6 @@ var speechRoleAssignments = [
 
 var contentSafetyRoleAssignments = [
   { principalId: uamiPrincipalId, principalType: 'ServicePrincipal', roleDefinitionId: roleIds.cognitiveServicesUser }
-]
-
-var registryRoleAssignments = [
-  { principalId: uamiPrincipalId, principalType: 'ServicePrincipal', roleDefinitionId: roleIds.acrPullRoleId }
 ]
 
 var storageRoleAssignments = union(
@@ -185,11 +177,6 @@ resource speechServiceResource 'Microsoft.CognitiveServices/accounts@2025-12-01'
 
 resource contentSafetyResource 'Microsoft.CognitiveServices/accounts@2025-12-01' existing = {
   name: contentSafetyServiceName
-}
-
-resource containerRegistryResource 'Microsoft.ContainerRegistry/registries@2025-04-01' existing = if (!empty(containerRegistryName)) {
-  #disable-next-line BCP334
-  name: empty(containerRegistryName) ? 'placeholder' : containerRegistryName
 }
 
 resource storageAccountResource 'Microsoft.Storage/storageAccounts@2025-08-01' existing = {
@@ -254,18 +241,6 @@ resource contentSafetyRoles 'Microsoft.Authorization/roleAssignments@2022-04-01'
   for ra in contentSafetyRoleAssignments: {
     name: guid(contentSafetyResource.id, ra.principalId, ra.roleDefinitionId)
     scope: contentSafetyResource
-    properties: {
-      principalId: ra.principalId
-      roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', ra.roleDefinitionId)
-      principalType: ra.principalType
-    }
-  }
-]
-
-resource registryRoles 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
-  for ra in registryRoleAssignments: {
-    name: guid(containerRegistryResource.id, ra.principalId, ra.roleDefinitionId)
-    scope: containerRegistryResource
     properties: {
       principalId: ra.principalId
       roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', ra.roleDefinitionId)

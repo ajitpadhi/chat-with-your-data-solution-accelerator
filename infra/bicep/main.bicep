@@ -458,6 +458,9 @@ module containerRegistry './modules/compute/container-registry.bicep' = {
         '${userAssignedIdentity.outputs.resourceId}': {}
       }
     }
+    acrPullPrincipalIds: [
+      userAssignedIdentity.outputs.principalId
+    ]
   }
 }
 
@@ -748,7 +751,6 @@ module roleAssignments './modules/identity/role-assignments.bicep' = {
     searchPrincipalId: isCosmos ? aiSearch!.outputs.identityPrincipalId : ''
     deployingUserPrincipalId: deployingUserPrincipalId
     deployingUserPrincipalType: deployingUserPrincipalType
-    containerRegistryName: containerRegistry.outputs.name
   }
 }
 // ===================== //
