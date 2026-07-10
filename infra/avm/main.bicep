@@ -94,6 +94,9 @@ param searchKnowledgeBaseName string = 'cwyd-kb'
 @description('Optional. Foundry IQ knowledge source name backing the knowledge base (the search-index knowledge source seeded by post_provision.py).')
 param searchKnowledgeSourceName string = 'cwyd-index-ks'
 
+@description('Optional. Chat index name the azure_search provider reads/writes and post_provision.py creates. Single-sourced so the backend env binding and the azd output (consumed by the postdeploy seed self-check) cannot diverge.')
+param searchIndexName string = 'cwyd-index'
+
 @description('Optional. Foundry IQ knowledge base / knowledge source REST API version (operator-tunable so the KB protocol can advance without a new image).')
 param searchKnowledgeBaseApiVersion string = '2025-11-01-preview'
 
@@ -1100,12 +1103,12 @@ module backendContainerApp './modules/compute/container-app.bicep' = {
             { name: 'AZURE_OPENAI_API_VERSION', value: azureOpenAiApiVersion }
             { name: 'AZURE_AI_AGENT_API_VERSION', value: azureAiAgentApiVersion }
             { name: 'AZURE_OPENAI_GPT_DEPLOYMENT', value: gptModelName }
-            { name: 'AZURE_OPENAI_REASONING_DEPLOYMENT', value: reasoningModelName }
             { name: 'AZURE_OPENAI_EMBEDDING_DEPLOYMENT', value: embeddingModelName }
             { name: 'AZURE_DB_TYPE', value: databaseType }
             { name: 'AZURE_INDEX_STORE', value: indexStoreValue }
             { name: 'AZURE_COSMOS_ENDPOINT', value: isCosmos ? cosmosDb!.outputs.endpoint : '' }
             { name: 'AZURE_AI_SEARCH_ENDPOINT', value: isCosmos ? aiSearch!.outputs.endpoint : '' }
+            { name: 'AZURE_AI_SEARCH_INDEX', value: isCosmos ? searchIndexName : '' }
             { name: 'AZURE_AI_SEARCH_KNOWLEDGE_BASE_NAME', value: searchKnowledgeBaseName }
             { name: 'AZURE_AI_SEARCH_KNOWLEDGE_SOURCE_NAME', value: searchKnowledgeSourceName }
             { name: 'AZURE_AI_SEARCH_KNOWLEDGE_BASE_API_VERSION', value: searchKnowledgeBaseApiVersion }
@@ -1117,7 +1120,7 @@ module backendContainerApp './modules/compute/container-app.bicep' = {
             { name: 'AZURE_SPEECH_ACCOUNT_RESOURCE_ID', value: speechService.outputs.resourceId }
             { name: 'AZURE_CONTENT_SAFETY_ENABLED', value: 'true' }
             { name: 'AZURE_CONTENT_SAFETY_ENDPOINT', value: contentSafety.outputs.endpoint }
-            { name: 'ORCHESTRATOR', value: 'agent_framework' }
+            { name: 'CWYD_ORCHESTRATOR_NAME', value: databaseType == 'postgresql' ? 'langgraph' : 'agent_framework' }
             { name: 'AZURE_STORAGE_ACCOUNT_NAME', value: storageAccount.outputs.name }
             { name: 'AZURE_DOCUMENTS_CONTAINER', value: documentsContainerName }
             { name: 'AZURE_DOC_PROCESSING_QUEUE', value: docProcessingQueueName }
@@ -1531,6 +1534,9 @@ output AZURE_AI_SEARCH_ENDPOINT string = isCosmos ? aiSearch!.outputs.endpoint :
 
 @description('AI Search service name. Empty in PostgreSQL mode.')
 output AZURE_AI_SEARCH_NAME string = isCosmos ? aiSearch!.outputs.name : ''
+
+@description('Chat index name. Exported so the postdeploy seed hook can run its index-population self-check; empty in postgresql mode (no AI Search).')
+output AZURE_AI_SEARCH_INDEX string = databaseType == 'cosmosdb' ? searchIndexName : ''
 
 // --- Conditional: Cosmos DB (CosmosDB mode only) ---
 

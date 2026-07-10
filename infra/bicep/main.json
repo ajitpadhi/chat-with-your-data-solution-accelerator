@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "7153960449077868897"
+      "templateHash": "2612927604378904497"
     }
   },
   "parameters": {
@@ -169,6 +169,13 @@
       "defaultValue": "cwyd-index-ks",
       "metadata": {
         "description": "Optional. Foundry IQ knowledge source name backing the knowledge base (the search-index knowledge source seeded by post_provision.py)."
+      }
+    },
+    "searchIndexName": {
+      "type": "string",
+      "defaultValue": "cwyd-index",
+      "metadata": {
+        "description": "Optional. Chat index name the azure_search provider reads/writes and post_provision.py creates. Single-sourced so the backend env binding and the azd output (consumed by the postdeploy seed self-check) cannot diverge."
       }
     },
     "searchKnowledgeBaseApiVersion": {
@@ -2931,6 +2938,11 @@
                 "[format('{0}', reference('userAssignedIdentity').outputs.resourceId.value)]": {}
               }
             }
+          },
+          "acrPullPrincipalIds": {
+            "value": [
+              "[reference('userAssignedIdentity').outputs.principalId.value]"
+            ]
           }
         },
         "template": {
@@ -2940,7 +2952,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "6730962297935458636"
+              "templateHash": "3494982998054240572"
             }
           },
           "parameters": {
@@ -3022,7 +3034,17 @@
               "metadata": {
                 "description": "Optional. Managed identity configuration for the resource."
               }
+            },
+            "acrPullPrincipalIds": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "Principal IDs to grant the AcrPull role on this registry."
+              }
             }
+          },
+          "variables": {
+            "acrPullRoleId": "7f951dda-4ed3-4680-a7ca-43fe172d538d"
           },
           "resources": [
             {
@@ -3055,6 +3077,24 @@
                 },
                 "zoneRedundancy": "Disabled"
               }
+            },
+            {
+              "copy": {
+                "name": "acrPullRoles",
+                "count": "[length(parameters('acrPullPrincipalIds'))]"
+              },
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.ContainerRegistry/registries', parameters('name'))]",
+              "name": "[guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('name')), parameters('acrPullPrincipalIds')[copyIndex()], variables('acrPullRoleId'))]",
+              "properties": {
+                "principalId": "[parameters('acrPullPrincipalIds')[copyIndex()]]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('acrPullRoleId'))]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('name'))]"
+              ]
             }
           ],
           "outputs": {
@@ -3295,7 +3335,7 @@
                   "cpu": "[json('0.5')]",
                   "memory": "1.0Gi"
                 },
-                "env": "[concat(createArray(createObject('name', 'AZURE_CLIENT_ID', 'value', reference('userAssignedIdentity').outputs.clientId.value), createObject('name', 'AZURE_UAMI_CLIENT_ID', 'value', reference('userAssignedIdentity').outputs.clientId.value), createObject('name', 'AZURE_TENANT_ID', 'value', subscription().tenantId), createObject('name', 'AZURE_ENVIRONMENT', 'value', 'production'), createObject('name', 'AZURE_AI_PROJECT_ENDPOINT', 'value', if(variables('useExistingAIProject'), reference('existingAIProject').outputs.projectEndpoint.value, reference('aiProject').outputs.projectEndpoint.value)), createObject('name', 'AZURE_OPENAI_ENDPOINT', 'value', if(variables('useExistingAIProject'), reference('existingAIProject').outputs.endpoint.value, reference('aiProject').outputs.endpoint.value)), createObject('name', 'AZURE_AI_SERVICES_ENDPOINT', 'value', if(variables('useExistingAIProject'), reference('existingAIProject').outputs.endpoint.value, reference('aiProject').outputs.endpoint.value)), createObject('name', 'AZURE_OPENAI_API_VERSION', 'value', parameters('azureOpenAiApiVersion')), createObject('name', 'AZURE_AI_AGENT_API_VERSION', 'value', parameters('azureAiAgentApiVersion')), createObject('name', 'AZURE_OPENAI_GPT_DEPLOYMENT', 'value', parameters('gptModelName')), createObject('name', 'AZURE_OPENAI_REASONING_DEPLOYMENT', 'value', parameters('reasoningModelName')), createObject('name', 'AZURE_OPENAI_EMBEDDING_DEPLOYMENT', 'value', parameters('embeddingModelName')), createObject('name', 'AZURE_DB_TYPE', 'value', parameters('databaseType')), createObject('name', 'AZURE_INDEX_STORE', 'value', variables('indexStoreValue')), createObject('name', 'AZURE_COSMOS_ENDPOINT', 'value', if(variables('isCosmos'), reference('cosmosDb').outputs.endpoint.value, '')), createObject('name', 'AZURE_AI_SEARCH_ENDPOINT', 'value', if(variables('isCosmos'), reference('aiSearch').outputs.endpoint.value, '')), createObject('name', 'AZURE_AI_SEARCH_KNOWLEDGE_BASE_NAME', 'value', parameters('searchKnowledgeBaseName')), createObject('name', 'AZURE_AI_SEARCH_KNOWLEDGE_SOURCE_NAME', 'value', parameters('searchKnowledgeSourceName')), createObject('name', 'AZURE_AI_SEARCH_KNOWLEDGE_BASE_API_VERSION', 'value', parameters('searchKnowledgeBaseApiVersion')), createObject('name', 'AZURE_AI_SEARCH_CONNECTION_NAME', 'value', if(variables('isCosmos'), reference('aiProjectSearchConnection').outputs.connectionName.value, '')), createObject('name', 'AZURE_POSTGRES_ENDPOINT', 'value', if(equals(parameters('databaseType'), 'postgresql'), format('postgresql://{0}:5432/cwyd?sslmode=require', reference('postgresServer').outputs.serverFqdn.value), '')), createObject('name', 'AZURE_POSTGRES_ADMIN_PRINCIPAL_NAME', 'value', if(equals(parameters('databaseType'), 'postgresql'), reference('userAssignedIdentity').outputs.name.value, '')), createObject('name', 'AZURE_SPEECH_SERVICE_NAME', 'value', reference('speechService').outputs.name.value), createObject('name', 'AZURE_SPEECH_SERVICE_REGION', 'value', parameters('azureAiServiceLocation')), createObject('name', 'AZURE_SPEECH_ACCOUNT_RESOURCE_ID', 'value', reference('speechService').outputs.resourceId.value), createObject('name', 'AZURE_CONTENT_SAFETY_ENABLED', 'value', 'true'), createObject('name', 'AZURE_CONTENT_SAFETY_ENDPOINT', 'value', reference('contentSafety').outputs.endpoint.value), createObject('name', 'ORCHESTRATOR', 'value', 'agent_framework'), createObject('name', 'AZURE_STORAGE_ACCOUNT_NAME', 'value', reference('storageAccount').outputs.name.value), createObject('name', 'AZURE_DOCUMENTS_CONTAINER', 'value', variables('documentsContainerName')), createObject('name', 'AZURE_DOC_PROCESSING_QUEUE', 'value', variables('docProcessingQueueName')), createObject('name', 'AZURE_INGESTION_TRIGGER', 'value', parameters('ingestionTrigger'))), if(parameters('enableMonitoring'), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', if(parameters('enableMonitoring'), reference('applicationInsights').outputs.connectionString.value, ''))), createArray()))]"
+                "env": "[concat(createArray(createObject('name', 'AZURE_CLIENT_ID', 'value', reference('userAssignedIdentity').outputs.clientId.value), createObject('name', 'AZURE_UAMI_CLIENT_ID', 'value', reference('userAssignedIdentity').outputs.clientId.value), createObject('name', 'AZURE_TENANT_ID', 'value', subscription().tenantId), createObject('name', 'AZURE_ENVIRONMENT', 'value', 'production'), createObject('name', 'AZURE_AI_PROJECT_ENDPOINT', 'value', if(variables('useExistingAIProject'), reference('existingAIProject').outputs.projectEndpoint.value, reference('aiProject').outputs.projectEndpoint.value)), createObject('name', 'AZURE_OPENAI_ENDPOINT', 'value', if(variables('useExistingAIProject'), reference('existingAIProject').outputs.endpoint.value, reference('aiProject').outputs.endpoint.value)), createObject('name', 'AZURE_AI_SERVICES_ENDPOINT', 'value', if(variables('useExistingAIProject'), reference('existingAIProject').outputs.endpoint.value, reference('aiProject').outputs.endpoint.value)), createObject('name', 'AZURE_OPENAI_API_VERSION', 'value', parameters('azureOpenAiApiVersion')), createObject('name', 'AZURE_AI_AGENT_API_VERSION', 'value', parameters('azureAiAgentApiVersion')), createObject('name', 'AZURE_OPENAI_GPT_DEPLOYMENT', 'value', parameters('gptModelName')), createObject('name', 'AZURE_OPENAI_EMBEDDING_DEPLOYMENT', 'value', parameters('embeddingModelName')), createObject('name', 'AZURE_DB_TYPE', 'value', parameters('databaseType')), createObject('name', 'AZURE_INDEX_STORE', 'value', variables('indexStoreValue')), createObject('name', 'AZURE_COSMOS_ENDPOINT', 'value', if(variables('isCosmos'), reference('cosmosDb').outputs.endpoint.value, '')), createObject('name', 'AZURE_AI_SEARCH_ENDPOINT', 'value', if(variables('isCosmos'), reference('aiSearch').outputs.endpoint.value, '')), createObject('name', 'AZURE_AI_SEARCH_INDEX', 'value', if(variables('isCosmos'), parameters('searchIndexName'), '')), createObject('name', 'AZURE_AI_SEARCH_KNOWLEDGE_BASE_NAME', 'value', parameters('searchKnowledgeBaseName')), createObject('name', 'AZURE_AI_SEARCH_KNOWLEDGE_SOURCE_NAME', 'value', parameters('searchKnowledgeSourceName')), createObject('name', 'AZURE_AI_SEARCH_KNOWLEDGE_BASE_API_VERSION', 'value', parameters('searchKnowledgeBaseApiVersion')), createObject('name', 'AZURE_AI_SEARCH_CONNECTION_NAME', 'value', if(variables('isCosmos'), reference('aiProjectSearchConnection').outputs.connectionName.value, '')), createObject('name', 'AZURE_POSTGRES_ENDPOINT', 'value', if(equals(parameters('databaseType'), 'postgresql'), format('postgresql://{0}:5432/cwyd?sslmode=require', reference('postgresServer').outputs.serverFqdn.value), '')), createObject('name', 'AZURE_POSTGRES_ADMIN_PRINCIPAL_NAME', 'value', if(not(variables('isCosmos')), reference('userAssignedIdentity').outputs.name.value, '')), createObject('name', 'AZURE_SPEECH_SERVICE_NAME', 'value', reference('speechService').outputs.name.value), createObject('name', 'AZURE_SPEECH_SERVICE_REGION', 'value', parameters('azureAiServiceLocation')), createObject('name', 'AZURE_SPEECH_ACCOUNT_RESOURCE_ID', 'value', reference('speechService').outputs.resourceId.value), createObject('name', 'AZURE_CONTENT_SAFETY_ENABLED', 'value', 'true'), createObject('name', 'AZURE_CONTENT_SAFETY_ENDPOINT', 'value', reference('contentSafety').outputs.endpoint.value), createObject('name', 'CWYD_ORCHESTRATOR_NAME', 'value', if(equals(parameters('databaseType'), 'postgresql'), 'langgraph', 'agent_framework')), createObject('name', 'AZURE_STORAGE_ACCOUNT_NAME', 'value', reference('storageAccount').outputs.name.value), createObject('name', 'AZURE_DOCUMENTS_CONTAINER', 'value', variables('documentsContainerName')), createObject('name', 'AZURE_DOC_PROCESSING_QUEUE', 'value', variables('docProcessingQueueName')), createObject('name', 'AZURE_INGESTION_TRIGGER', 'value', parameters('ingestionTrigger'))), if(parameters('enableMonitoring'), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', if(parameters('enableMonitoring'), reference('applicationInsights').outputs.connectionString.value, ''))), createArray()))]"
               }
             ]
           }
@@ -4125,6 +4165,260 @@
         "userAssignedIdentity"
       ]
     },
+    "eventGridSystemTopic": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[take(format('module.event-grid.{0}', parameters('solutionName')), 64)]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "solutionName": {
+            "value": "[variables('solutionSuffix')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('allTags')]"
+          },
+          "source": {
+            "value": "[reference('storageAccount').outputs.resourceId.value]"
+          },
+          "topicType": {
+            "value": "Microsoft.Storage.StorageAccounts"
+          },
+          "storageAccountName": {
+            "value": "[reference('storageAccount').outputs.name.value]"
+          },
+          "eventSubscriptions": {
+            "value": [
+              {
+                "name": "blob-created-to-blob-events",
+                "deliveryWithResourceIdentity": {
+                  "identity": {
+                    "type": "SystemAssigned"
+                  },
+                  "destination": {
+                    "endpointType": "StorageQueue",
+                    "properties": {
+                      "resourceId": "[reference('storageAccount').outputs.resourceId.value]",
+                      "queueName": "[variables('blobEventsQueueName')]"
+                    }
+                  }
+                },
+                "filter": {
+                  "includedEventTypes": [
+                    "Microsoft.Storage.BlobCreated",
+                    "Microsoft.Storage.BlobDeleted"
+                  ],
+                  "subjectBeginsWith": "[format('/blobServices/default/containers/{0}/', variables('documentsContainerName'))]",
+                  "enableAdvancedFilteringOnArrays": true
+                },
+                "eventDeliverySchema": "EventGridSchema",
+                "retryPolicy": {
+                  "maxDeliveryAttempts": 30,
+                  "eventTimeToLiveInMinutes": 1440
+                }
+              }
+            ]
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "1825165045364081566"
+            }
+          },
+          "parameters": {
+            "solutionName": {
+              "type": "string",
+              "metadata": {
+                "description": "Solution name suffix used to derive the resource name."
+              }
+            },
+            "name": {
+              "type": "string",
+              "defaultValue": "[format('evgt-{0}', parameters('solutionName'))]",
+              "metadata": {
+                "description": "Name of the Event Grid System Topic."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for the resource."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Tags to apply to the resource."
+              }
+            },
+            "source": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the source that publishes events (e.g., Storage Account resource ID)."
+              }
+            },
+            "topicType": {
+              "type": "string",
+              "metadata": {
+                "description": "The type of the event source. E.g., Microsoft.Storage.StorageAccounts."
+              }
+            },
+            "eventSubscriptions": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "Event subscriptions to create on the system topic."
+              }
+            },
+            "identity": {
+              "type": "object",
+              "defaultValue": {
+                "type": "SystemAssigned"
+              },
+              "metadata": {
+                "description": "Optional. Managed identity configuration for the resource."
+              }
+            },
+            "storageAccountName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Name of the storage account used to scope the Storage Queue Data Message Sender role assignment. Required when eventSubscriptions use identity-based (deliveryWithResourceIdentity) delivery."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.EventGrid/systemTopics",
+              "apiVersion": "2025-07-15-preview",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": "[parameters('identity')]",
+              "properties": {
+                "source": "[parameters('source')]",
+                "topicType": "[parameters('topicType')]"
+              }
+            },
+            {
+              "condition": "[and(not(empty(parameters('storageAccountName'))), not(empty(parameters('eventSubscriptions'))))]",
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), resourceId('Microsoft.EventGrid/systemTopics', parameters('name')), 'c6a89b2d-59bc-44d0-9896-0f6e12d7b80a')]",
+              "properties": {
+                "principalId": "[reference(resourceId('Microsoft.EventGrid/systemTopics', parameters('name')), '2025-07-15-preview', 'full').identity.principalId]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'c6a89b2d-59bc-44d0-9896-0f6e12d7b80a')]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.EventGrid/systemTopics', parameters('name'))]"
+              ]
+            },
+            {
+              "condition": "[not(empty(parameters('eventSubscriptions')))]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[take(format('module.event-grid-subs.{0}', parameters('name')), 64)]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "systemTopicName": {
+                    "value": "[parameters('name')]"
+                  },
+                  "eventSubscriptions": {
+                    "value": "[parameters('eventSubscriptions')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.44.1.10279",
+                      "templateHash": "7264603977887609802"
+                    }
+                  },
+                  "parameters": {
+                    "systemTopicName": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Name of the existing Event Grid System Topic to attach subscriptions to."
+                      }
+                    },
+                    "eventSubscriptions": {
+                      "type": "array",
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Event subscriptions to create on the system topic."
+                      }
+                    }
+                  },
+                  "resources": [
+                    {
+                      "copy": {
+                        "name": "systemTopicSubscriptions",
+                        "count": "[length(parameters('eventSubscriptions'))]"
+                      },
+                      "type": "Microsoft.EventGrid/systemTopics/eventSubscriptions",
+                      "apiVersion": "2025-07-15-preview",
+                      "name": "[format('{0}/{1}', parameters('systemTopicName'), parameters('eventSubscriptions')[copyIndex()].name)]",
+                      "properties": "[union(createObject('filter', coalesce(tryGet(parameters('eventSubscriptions')[copyIndex()], 'filter'), createObject()), 'eventDeliverySchema', coalesce(tryGet(parameters('eventSubscriptions')[copyIndex()], 'eventDeliverySchema'), 'EventGridSchema'), 'retryPolicy', coalesce(tryGet(parameters('eventSubscriptions')[copyIndex()], 'retryPolicy'), createObject('maxDeliveryAttempts', 30, 'eventTimeToLiveInMinutes', 1440))), if(not(equals(tryGet(parameters('eventSubscriptions')[copyIndex()], 'deliveryWithResourceIdentity'), null())), createObject('deliveryWithResourceIdentity', parameters('eventSubscriptions')[copyIndex()].deliveryWithResourceIdentity), createObject('destination', parameters('eventSubscriptions')[copyIndex()].destination)))]"
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), resourceId('Microsoft.EventGrid/systemTopics', parameters('name')), 'c6a89b2d-59bc-44d0-9896-0f6e12d7b80a'))]",
+                "[resourceId('Microsoft.EventGrid/systemTopics', parameters('name'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the Event Grid System Topic."
+              },
+              "value": "[parameters('name')]"
+            },
+            "resourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the Event Grid System Topic."
+              },
+              "value": "[resourceId('Microsoft.EventGrid/systemTopics', parameters('name'))]"
+            },
+            "systemAssignedMIPrincipalId": {
+              "type": "string",
+              "metadata": {
+                "description": "System-assigned principal ID (if enabled)."
+              },
+              "value": "[if(and(contains(parameters('identity'), 'type'), contains(parameters('identity').type, 'SystemAssigned')), reference(resourceId('Microsoft.EventGrid/systemTopics', parameters('name')), '2025-07-15-preview', 'full').identity.principalId, '')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "storageAccount"
+      ]
+    },
     "roleAssignments": {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -4179,9 +4473,6 @@
           },
           "deployingUserPrincipalType": {
             "value": "[parameters('deployingUserPrincipalType')]"
-          },
-          "containerRegistryName": {
-            "value": "[reference('containerRegistry').outputs.name.value]"
           }
         },
         "template": {
@@ -4191,7 +4482,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "7646792469243638054"
+              "templateHash": "6355776151286783389"
             }
           },
           "parameters": {
@@ -4217,13 +4508,6 @@
               "type": "string",
               "metadata": {
                 "description": "Name of the Content Safety service account."
-              }
-            },
-            "containerRegistryName": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Name of the Container Registry."
               }
             },
             "storageName": {
@@ -4324,8 +4608,7 @@
               "storageBlobDataContributor": "ba92f5b4-2d11-453d-a403-e96b0029c9fe",
               "storageBlobDataOwner": "b7e6dc6d-f1e8-4753-8033-0f276bb0955b",
               "storageQueueDataContributor": "974c5e8b-45b9-4653-ba55-5f855dd0fb88",
-              "storageAccountContributor": "17d1049b-9a84-46fb-8f53-869881c3d3ab",
-              "acrPullRoleId": "7f951dda-4ed3-4680-a7ca-43fe172d538d"
+              "storageAccountContributor": "17d1049b-9a84-46fb-8f53-869881c3d3ab"
             },
             "cosmosDataContributorRoleId": "00000000-0000-0000-0000-000000000002",
             "foundryRoleAssignmentsBase": "[union(createArray(createObject('principalId', parameters('uamiPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').cognitiveServicesOpenAIUser), createObject('principalId', parameters('uamiPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').cognitiveServicesUser), createObject('principalId', parameters('uamiPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').azureAiUser), createObject('principalId', parameters('deployingUserPrincipalId'), 'principalType', parameters('deployingUserPrincipalType'), 'roleDefinitionId', variables('roleIds').cognitiveServicesUser), createObject('principalId', parameters('deployingUserPrincipalId'), 'principalType', parameters('deployingUserPrincipalType'), 'roleDefinitionId', variables('roleIds').azureAiUser)), if(parameters('isCosmos'), createArray(createObject('principalId', parameters('searchPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').cognitiveServicesUser), createObject('principalId', parameters('searchPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').cognitiveServicesOpenAIUser)), createArray()))]",
@@ -4343,13 +4626,6 @@
                 "principalId": "[parameters('uamiPrincipalId')]",
                 "principalType": "ServicePrincipal",
                 "roleDefinitionId": "[variables('roleIds').cognitiveServicesUser]"
-              }
-            ],
-            "registryRoleAssignments": [
-              {
-                "principalId": "[parameters('uamiPrincipalId')]",
-                "principalType": "ServicePrincipal",
-                "roleDefinitionId": "[variables('roleIds').acrPullRoleId]"
               }
             ],
             "storageRoleAssignments": "[union(createArray(createObject('principalId', parameters('uamiPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').storageBlobDataContributor), createObject('principalId', parameters('uamiPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').storageQueueDataContributor), createObject('principalId', parameters('uamiPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').storageAccountContributor), createObject('principalId', parameters('foundryProjectPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').storageBlobDataContributor), createObject('principalId', parameters('functionPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').storageBlobDataOwner), createObject('principalId', parameters('functionPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').storageQueueDataContributor), createObject('principalId', parameters('functionPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').storageAccountContributor), createObject('principalId', parameters('deployingUserPrincipalId'), 'principalType', parameters('deployingUserPrincipalType'), 'roleDefinitionId', variables('roleIds').storageBlobDataContributor)), if(parameters('isCosmos'), createArray(createObject('principalId', parameters('searchPrincipalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('roleIds').storageBlobDataContributor)), createArray()))]",
@@ -4400,21 +4676,6 @@
                 "principalId": "[variables('contentSafetyRoleAssignments')[copyIndex()].principalId]",
                 "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('contentSafetyRoleAssignments')[copyIndex()].roleDefinitionId)]",
                 "principalType": "[variables('contentSafetyRoleAssignments')[copyIndex()].principalType]"
-              }
-            },
-            {
-              "copy": {
-                "name": "registryRoles",
-                "count": "[length(variables('registryRoleAssignments'))]"
-              },
-              "type": "Microsoft.Authorization/roleAssignments",
-              "apiVersion": "2022-04-01",
-              "scope": "[resourceId('Microsoft.ContainerRegistry/registries', if(empty(parameters('containerRegistryName')), 'placeholder', parameters('containerRegistryName')))]",
-              "name": "[guid(resourceId('Microsoft.ContainerRegistry/registries', if(empty(parameters('containerRegistryName')), 'placeholder', parameters('containerRegistryName'))), variables('registryRoleAssignments')[copyIndex()].principalId, variables('registryRoleAssignments')[copyIndex()].roleDefinitionId)]",
-              "properties": {
-                "principalId": "[variables('registryRoleAssignments')[copyIndex()].principalId]",
-                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('registryRoleAssignments')[copyIndex()].roleDefinitionId)]",
-                "principalType": "[variables('registryRoleAssignments')[copyIndex()].principalType]"
               }
             },
             {
@@ -4564,7 +4825,6 @@
       "dependsOn": [
         "aiProject",
         "aiSearch",
-        "containerRegistry",
         "contentSafety",
         "existingAIProject",
         "functionContainerApp",
@@ -4748,6 +5008,13 @@
         "description": "AI Search service name (cosmosdb mode only)."
       },
       "value": "[if(variables('isCosmos'), reference('aiSearch').outputs.name.value, '')]"
+    },
+    "AZURE_AI_SEARCH_INDEX": {
+      "type": "string",
+      "metadata": {
+        "description": "Chat index name. Exported so the postdeploy seed hook can run its index-population self-check; empty in postgresql mode (no AI Search)."
+      },
+      "value": "[if(equals(parameters('databaseType'), 'cosmosdb'), parameters('searchIndexName'), '')]"
     },
     "AZURE_COSMOS_ENDPOINT": {
       "type": "string",

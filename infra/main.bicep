@@ -156,6 +156,9 @@ param searchKnowledgeBaseName string = 'cwyd-kb'
 @description('Optional. Foundry IQ knowledge source name backing the knowledge base (the search-index knowledge source seeded by post_provision.py).')
 param searchKnowledgeSourceName string = 'cwyd-index-ks'
 
+@description('Optional. Chat index name the azure_search provider reads/writes and post_provision.py creates. Single-sourced so the backend env binding and the azd output (consumed by the postdeploy seed self-check) cannot diverge.')
+param searchIndexName string = 'cwyd-index'
+
 @description('Optional. Foundry IQ knowledge base / knowledge source REST API version (operator-tunable so the KB protocol can advance without a new image).')
 param searchKnowledgeBaseApiVersion string = '2025-11-01-preview'
 
@@ -258,6 +261,7 @@ module avmDeployment './avm/main.bicep' = if (isAvm) {
     azureAiAgentApiVersion: azureAiAgentApiVersion
     searchKnowledgeBaseName: searchKnowledgeBaseName
     searchKnowledgeSourceName: searchKnowledgeSourceName
+    searchIndexName: searchIndexName
     searchKnowledgeBaseApiVersion: searchKnowledgeBaseApiVersion
     enableTelemetry: enableTelemetry
     enableMonitoring: enableMonitoring
@@ -305,6 +309,7 @@ module bicepDeployment './bicep/main.bicep' = if (isBicep) {
     azureAiAgentApiVersion: azureAiAgentApiVersion
     searchKnowledgeBaseName: searchKnowledgeBaseName
     searchKnowledgeSourceName: searchKnowledgeSourceName
+    searchIndexName: searchIndexName
     searchKnowledgeBaseApiVersion: searchKnowledgeBaseApiVersion
     enableMonitoring: enableMonitoring
     existingLogAnalyticsWorkspaceId: existingLogAnalyticsWorkspaceId
@@ -403,6 +408,9 @@ output AZURE_AI_SEARCH_ENDPOINT string = isAvm ? avmDeployment!.outputs.AZURE_AI
 
 @description('AI Search service name. Empty in postgresql mode.')
 output AZURE_AI_SEARCH_NAME string = isAvm ? avmDeployment!.outputs.AZURE_AI_SEARCH_NAME : bicepDeployment!.outputs.AZURE_AI_SEARCH_NAME
+
+@description('Chat index name. Exported so the postdeploy seed hook can run its index-population self-check; empty in postgresql mode (no AI Search).')
+output AZURE_AI_SEARCH_INDEX string = isAvm ? avmDeployment!.outputs.AZURE_AI_SEARCH_INDEX : bicepDeployment!.outputs.AZURE_AI_SEARCH_INDEX
 
 // --- Cosmos DB (cosmosdb mode only) ---
 
