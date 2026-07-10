@@ -674,50 +674,50 @@ module functionContainerApp './modules/compute/container-app.bicep' = {
 }
 
 // ========== Event Grid (storage blob events -> blob-events queue) ========== //
-// module eventGridSystemTopic './modules/data/event-grid.bicep' = {
-//   name: take('module.event-grid.${solutionName}', 64)
-//   params: {
-//     solutionName: solutionSuffix
-//     location: location
-//     tags: allTags
-//     source: storageAccount.outputs.resourceId
-//     topicType: 'Microsoft.Storage.StorageAccounts'
-//     storageAccountName: storageAccount.outputs.name
-//     eventSubscriptions: [
-//       {
-//         name: 'blob-created-to-blob-events'
-//         deliveryWithResourceIdentity: {
-//           identity: {
-//             type: 'SystemAssigned'
-//           }
-//           destination: {
-//             endpointType: 'StorageQueue'
-//             properties: {
-//               resourceId: storageAccount.outputs.resourceId
-//               queueName: blobEventsQueueName
-//             }
-//           }
-//         }
-//         filter: {
-//           includedEventTypes: [
-//             'Microsoft.Storage.BlobCreated'
-//             'Microsoft.Storage.BlobDeleted'
-//           ]
-//           subjectBeginsWith: '/blobServices/default/containers/${documentsContainerName}/'
-//           enableAdvancedFilteringOnArrays: true
-//         }
-//         eventDeliverySchema: 'EventGridSchema'
-//         retryPolicy: {
-//           maxDeliveryAttempts: 30
-//           eventTimeToLiveInMinutes: 1440
-//         }
-//       }
-//     ]
-//   }
-//   dependsOn: [
-//     storageAccount
-//   ]
-// }
+module eventGridSystemTopic './modules/data/event-grid.bicep' = {
+  name: take('module.event-grid.${solutionName}', 64)
+  params: {
+    solutionName: solutionSuffix
+    location: location
+    tags: allTags
+    source: storageAccount.outputs.resourceId
+    topicType: 'Microsoft.Storage.StorageAccounts'
+    storageAccountName: storageAccount.outputs.name
+    eventSubscriptions: [
+      {
+        name: 'blob-created-to-blob-events'
+        deliveryWithResourceIdentity: {
+          identity: {
+            type: 'SystemAssigned'
+          }
+          destination: {
+            endpointType: 'StorageQueue'
+            properties: {
+              resourceId: storageAccount.outputs.resourceId
+              queueName: blobEventsQueueName
+            }
+          }
+        }
+        filter: {
+          includedEventTypes: [
+            'Microsoft.Storage.BlobCreated'
+            'Microsoft.Storage.BlobDeleted'
+          ]
+          subjectBeginsWith: '/blobServices/default/containers/${documentsContainerName}/'
+          enableAdvancedFilteringOnArrays: true
+        }
+        eventDeliverySchema: 'EventGridSchema'
+        retryPolicy: {
+          maxDeliveryAttempts: 30
+          eventTimeToLiveInMinutes: 1440
+        }
+      }
+    ]
+  }
+  dependsOn: [
+    storageAccount
+  ]
+}
 
 // ============================================================================
 // Role Assignments (centralized in modules/identity/role-assignments.bicep).

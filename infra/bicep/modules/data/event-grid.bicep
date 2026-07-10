@@ -67,34 +67,21 @@ resource eventGridQueueSenderRole 'Microsoft.Authorization/roleAssignments@2022-
 }
 
 // ============================================================================
-// Event Subscriptions
-// Deployed AFTER the role assignment so the identity-based delivery
-// authorization preflight passes (mirrors the avm flavor's split pattern).
-// Each subscription uses identity-based delivery (deliveryWithResourceIdentity)
-// when provided, otherwise falls back to a plain destination.
+// Event Subscriptions — deployed as a SEPARATE nested deployment (not just an
+// in-deployment dependsOn) so the identity-based delivery role granted above has
+// time to propagate before this deployment's authorization preflight validates
+// the Storage Queue destination. Mirrors the avm flavor's split pattern.
 // ============================================================================
-resource systemTopicSubscriptions 'Microsoft.EventGrid/systemTopics/eventSubscriptions@2025-07-15-preview' = [
-  for sub in eventSubscriptions: {
-    name: sub.name
-    parent: eventGridSystemTopic
-    properties: union(
-      {
-        filter: sub.?filter ?? {}
-        eventDeliverySchema: sub.?eventDeliverySchema ?? 'EventGridSchema'
-        retryPolicy: sub.?retryPolicy ?? {
-          maxDeliveryAttempts: 30
-          eventTimeToLiveInMinutes: 1440
-        }
-      },
-      sub.?deliveryWithResourceIdentity != null
-        ? { deliveryWithResourceIdentity: sub.deliveryWithResourceIdentity }
-        : { destination: sub.destination }
-    )
-    dependsOn: [
-      eventGridQueueSenderRole
-    ]
+module eventGridSubscriptions './event-grid-subscription.bicep' = if (!empty(eventSubscriptions)) {
+  name: take('module.event-grid-subs.${name}', 64)
+  params: {
+    systemTopicName: eventGridSystemTopic.name
+    eventSubscriptions: eventSubscriptions
   }
-]
+  dependsOn: [
+    eventGridQueueSenderRole
+  ]
+}
 
 // ============================================================================
 // Outputs
